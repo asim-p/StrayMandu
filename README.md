@@ -8,6 +8,17 @@ A lightweight, pragmatic system to map stray dog populations, enable community r
 ## Problem
 Stray dogs in Nepal present public-health and safety challenges while also suffering from lack of coordinated care. Data is scarce and response is fragmented.
 
+## Done
+### Frontend
+✅
+✅
+
+### Backend
+✅ User register/login
+✅ Dog register
+❌ Firebase
+❌ Map API
+
 ## Goals
 - Rapidly collect geolocated reports of stray dogs (sightings, injuries, litters).
 - Provide a dashboard for NGOs/municipalities to triage and allocate resources.
