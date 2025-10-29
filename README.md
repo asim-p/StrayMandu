@@ -14,10 +14,10 @@ Stray dogs in Nepal present public-health and safety challenges while also suffe
 ✅
 
 ### Backend
-✅ User register/login
-✅ Dog register
-❌ Firebase
-❌ Map API
+✅ User register/login <br>
+✅ Dog register <br>
+❌ Firebase <br>
+❌ Map API <br>
 
 ## Goals
 - Rapidly collect geolocated reports of stray dogs (sightings, injuries, litters).
