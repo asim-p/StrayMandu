@@ -11,11 +11,12 @@ import {
   Platform,
   ScrollView,
   useWindowDimensions,
+  Alert
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { MaterialIcons, AntDesign } from '@expo/vector-icons';
+import { authService } from '../src/services/authService';
 
-// Define theme colors from your Tailwind config
 const COLORS = {
   primary: '#39E53D',
   primaryHover: '#2ECC32',
@@ -32,18 +33,42 @@ export default function Login() {
   const router = useRouter();
   const { height } = useWindowDimensions();
   
-  // State for form and UI toggles
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const [emailFocused, setEmailFocused] = useState(false);
   const [passwordFocused, setPasswordFocused] = useState(false);
 
-  const handleLogin = () => {
-    // Add auth logic here
-    console.log('Login attempt:', email);
-    // For demo, go back to home or dashboard
-    router.replace('/'); 
+  const [loading, setLoading] = useState(false);
+  
+  const handleLogin = async (): Promise<void> => {
+    if (!email?.trim() || !password) {
+      Alert.alert('Validation', 'Please enter both email and password.');
+      return;
+    }
+    const emailRegex = /\S+@\S+\.\S+/;
+    if (!emailRegex.test(email.trim())) {
+      Alert.alert('Validation', 'Please enter a valid email address.');
+      return;
+    }
+  
+    try {
+      setLoading(true);
+      const result = await authService.login({ email: email.trim(), password });
+      // If authService returns token/user, it should store token itself.
+      // If it returns a token but doesn't store it, store it here (example):
+      // if (result?.token) await AsyncStorage.setItem('authToken', result.token);
+  
+      // Navigate to home and replace so user can't go back to login
+      router.replace('/');
+    } catch (err: any) {
+      console.error('Login error', err);
+      const message =
+        err?.response?.data?.message || err?.message || 'Unable to log in — please try again.';
+      Alert.alert('Login failed', message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -58,7 +83,7 @@ export default function Login() {
           contentContainerStyle={[styles.scrollContent, { minHeight: height - 50 }]}
           showsVerticalScrollIndicator={false}
         >
-          {/* Header */}
+          {/* Header - Fixed to match Signup.tsx */}
           <View style={styles.header}>
             <Pressable onPress={() => router.back()} style={styles.headerLeft}>
               <View style={styles.logoCircle}>
@@ -67,16 +92,17 @@ export default function Login() {
               <Text style={styles.appName}>StrayMandu</Text>
             </Pressable>
             
-            {/* Optional Menu/Help Button */}
-            <Pressable style={styles.iconButton}>
-              <MaterialIcons name="more-vert" size={24} color="#374151" />
+            {/* Functional Back Button */}
+            <Pressable 
+                onPress={() => router.back()}
+                style={styles.backButton}
+            >
+              <MaterialIcons name="arrow-back" size={24} color="#374151" />
             </Pressable>
           </View>
 
           {/* Main Content */}
           <View style={styles.mainContainer}>
-            
-            {/* Welcome Text */}
             <View style={styles.welcomeSection}>
               <Text style={styles.title}>Welcome Back!</Text>
               <Text style={styles.subtitle}>
@@ -84,10 +110,7 @@ export default function Login() {
               </Text>
             </View>
 
-            {/* Form */}
             <View style={styles.formContainer}>
-              
-              {/* Email Input */}
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>Email Address</Text>
                 <View style={[
@@ -114,7 +137,6 @@ export default function Login() {
                 </View>
               </View>
 
-              {/* Password Input */}
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>Password</Text>
                 <View style={[
@@ -154,28 +176,26 @@ export default function Login() {
                 </Pressable>
               </View>
 
-              {/* Login Button */}
               <Pressable 
                 style={({ pressed }) => [
                   styles.loginButton,
-                  pressed && styles.buttonPressed
+                  pressed && styles.buttonPressed,
+                  loading && { opacity: 0.6 }
                 ]}
                 onPress={handleLogin}
+                disabled={loading}
               >
-                <Text style={styles.loginButtonText}>Log In</Text>
+                <Text style={styles.loginButtonText}>{loading ? 'Logging in...' : 'Log In'}</Text>
                 <MaterialIcons name="arrow-forward" size={20} color="#121811" />
               </Pressable>
-
             </View>
 
-            {/* Divider */}
             <View style={styles.dividerContainer}>
               <View style={styles.dividerLine} />
               <Text style={styles.dividerText}>Or continue with</Text>
               <View style={styles.dividerLine} />
             </View>
 
-            {/* Google Button */}
             <Pressable 
               style={({ pressed }) => [
                 styles.googleButton,
@@ -185,10 +205,8 @@ export default function Login() {
               <AntDesign name="google" size={20} color="#DB4437" />
               <Text style={styles.googleButtonText}>Log in with Google</Text>
             </Pressable>
-
           </View>
 
-          {/* Footer */}
           <View style={styles.footer}>
             <Text style={styles.footerText}>Don't have an account? </Text>
             <Pressable onPress={() => router.push('/signup')}>
@@ -238,7 +256,7 @@ const styles = StyleSheet.create({
     color: COLORS.textDark,
     letterSpacing: -0.5,
   },
-  iconButton: {
+  backButton: {
     padding: 8,
     borderRadius: 20,
     backgroundColor: 'transparent',
@@ -286,7 +304,6 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     height: 56,
     paddingHorizontal: 16,
-    // Soft shadow
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.05,
@@ -324,7 +341,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     backgroundColor: COLORS.primary,
     height: 56,
-    borderRadius: 28, // Pill shape
+    borderRadius: 28,
     justifyContent: 'center',
     alignItems: 'center',
     gap: 8,

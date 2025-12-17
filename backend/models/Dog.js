@@ -5,19 +5,28 @@ const dogSchema = new mongoose.Schema({
     type: String, 
     trim: true,
     default: "Unknown"
-},
+  },
   color: { 
     type: String, 
     required: [true, "Color is required"]
-},
+  },
   breed: {
     type: String,
     default: "Unknown"
   },
+  // --- CHANGED SECTION START ---
   location: {
-    type: String,
-    required: [true, "Location is required"]
+    type: {
+      type: String, 
+      enum: ['Point'], // 'location.type' must be 'Point'
+      default: 'Point'
+    },
+    coordinates: {
+      type: [Number], // Format: [longitude, latitude]
+      required: [true, "Coordinates are required"]
+    }
   },
+  // --- CHANGED SECTION END ---
   dateTime: {
     type: Date,
     default: Date.now
@@ -25,7 +34,7 @@ const dogSchema = new mongoose.Schema({
   condition: {
     type: String,
     enum: ["injured", "aggressive", "neutral", "healthy", "unknown"],
-    default: "neutral"
+    default: "unknown"
   },
   characteristics: {
     type: [String],
@@ -41,5 +50,7 @@ const dogSchema = new mongoose.Schema({
   }
 }, { timestamps: true });
 
-module.exports = mongoose.model('Dog', dogSchema);
+// Create a geospatial index to enable proximity searches (e.g., "Find dogs near me")
+dogSchema.index({ location: '2dsphere' });
 
+module.exports = mongoose.model('Dog', dogSchema);

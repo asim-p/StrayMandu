@@ -12,7 +12,7 @@ import {
   Animated,
   Dimensions,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, type Href } from 'expo-router';
 
 const { width } = Dimensions.get('window');
 
@@ -39,7 +39,7 @@ export default function Home() {
     }).start(() => setMenuVisible(false));
   };
 
-  const navigateTo = (path: string) => {
+  const navigateTo = (path: Href) => {
     closeMenu();
     setTimeout(() => router.push(path), 300);
   };
@@ -217,7 +217,7 @@ export default function Home() {
 
                 <Pressable 
                   style={styles.navItem}
-                  onPress={() => navigateTo('/about')}
+                  onPress={() => navigateTo('/home')}
                 >
                   <Text style={styles.navIcon}>ℹ️</Text>
                   <Text style={styles.navText}>About Us</Text>
@@ -225,7 +225,7 @@ export default function Home() {
 
                 <Pressable 
                   style={styles.navItem}
-                  onPress={() => navigateTo('/settings')}
+                  onPress={() => navigateTo('/home')}
                 >
                   <Text style={styles.navIcon}>⚙️</Text>
                   <Text style={styles.navText}>App Settings</Text>

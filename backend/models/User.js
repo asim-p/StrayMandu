@@ -19,8 +19,8 @@ const userSchema = new mongoose.Schema({
 },
   user_type: { 
     type: String, 
-    enum: ['reporter', 'tender'], 
-    default: 'reporter' 
+    enum: ['volunteer', 'organization'], 
+    default: 'volunteer' 
 },
   profile_photo: { 
     type: String 

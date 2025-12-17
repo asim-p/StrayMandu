@@ -24,6 +24,7 @@ const COLORS = {
   textGray: '#6B7280',
   textLightGray: '#9CA3AF',
   radioBorder: '#D1D5DB',
+  googleBorder: '#E5E7EB',
 };
 
 // --- Custom Component for User Type Selection ---
