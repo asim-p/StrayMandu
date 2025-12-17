@@ -12,7 +12,8 @@ const userSchema = new mongoose.Schema({
     minlength: 6,
 },
   name: { 
-    type: String 
+    type: String ,
+    required: true
 },
   phone: { 
     type: String
