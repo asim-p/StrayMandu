@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import BottomNav from '../src/components/BottomNav'; // Ensure path is correct
 
 const { width } = Dimensions.get('window');
 
@@ -52,7 +53,7 @@ export default function Donate() {
           <MaterialIcons name="arrow-back" size={24} color={COLORS.textMain} />
         </Pressable>
         <Text style={styles.headerTitle}>Support the Cause</Text>
-        <View style={{ width: 40 }} /> {/* Spacer to center title */}
+        <View style={{ width: 40 }} />
       </View>
 
       <ScrollView 
@@ -67,27 +68,22 @@ export default function Donate() {
           </Text>
         </View>
 
-        {/* QR Card Container */}
+        {/* QR Card */}
         <View style={styles.qrContainer}>
           <View style={styles.qrCard}>
-            {/* Top decorative line */}
             <View style={styles.qrDecorLine} />
-            
             <Pressable onLongPress={handleSaveQR} style={styles.qrFrame}>
               <Image
-                //source={{ uri: 'https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=StrayManduDonation' }}
-                source={ require('../img/QR.png') }
+                source={require('../img/QR.png')} // Changed to valid placeholder for test
                 style={styles.qrImage}
                 resizeMode="contain"
               />
             </Pressable>
-
             <View style={styles.scanBadge}>
               <MaterialIcons name="qr-code-scanner" size={18} color={COLORS.primary} />
               <Text style={styles.scanBadgeText}>SCAN TO PAY</Text>
             </View>
           </View>
-          
           <Text style={styles.saveInstruction}>Long press to save QR to gallery</Text>
         </View>
 
@@ -96,10 +92,8 @@ export default function Donate() {
           <MaterialIcons name="verified-user" size={16} color={COLORS.gray} />
           <Text style={styles.trustText}>Secure Payment via ConnectIPS</Text>
         </View>
-      </ScrollView>
 
-      {/* Bottom Sticky Button */}
-      <View style={styles.bottomActionContainer}>
+        {/* Donated Button (Moved inside ScrollView to avoid Nav overlap) */}
         <Pressable 
           onPress={handleConfirmDonation}
           style={({ pressed }) => [
@@ -110,7 +104,12 @@ export default function Donate() {
           <Text style={styles.donateButtonText}>I've Donated</Text>
           <MaterialIcons name="check-circle" size={20} color={COLORS.textMain} />
         </Pressable>
-      </View>
+
+      </ScrollView>
+
+      {/* REUSABLE COMPONENT - INSIDE THE FUNCTION */}
+      <BottomNav activePage="donate" />
+
     </SafeAreaView>
   );
 }
@@ -142,7 +141,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   scrollContent: {
-    paddingBottom: 120,
+    paddingBottom: 100, // Extra padding for BottomNav
     alignItems: 'center',
   },
   contentSection: {
@@ -166,7 +165,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   qrContainer: {
-    marginTop: 40,
+    marginTop: 30,
     alignItems: 'center',
     width: '100%',
   },
@@ -201,10 +200,7 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     borderWidth: 1,
     borderColor: '#F8FAFC',
-    ...Platform.select({
-      ios: { shadowColor: COLORS.primary, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.1, shadowRadius: 10 },
-      android: { elevation: 2 },
-    }),
+    elevation: 2,
   },
   qrImage: {
     width: 200,
@@ -231,25 +227,21 @@ const styles = StyleSheet.create({
   trustBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 40,
+    marginTop: 30,
     gap: 6,
     opacity: 0.6,
+    marginBottom: 30,
   },
   trustText: {
     fontSize: 12,
     fontWeight: '600',
     color: COLORS.gray,
   },
-  bottomActionContainer: {
-    position: 'absolute',
-    bottom: 0,
-    width: '100%',
-    padding: 20,
-    backgroundColor: 'rgba(246, 248, 246, 0.9)', // Match background with slight blur effect
-  },
+  // Updated Button Style to work inside ScrollView
   donateButton: {
     backgroundColor: COLORS.primary,
     height: 60,
+    width: width * 0.85, // specific width since it's no longer absolute
     borderRadius: 30,
     flexDirection: 'row',
     alignItems: 'center',
@@ -260,6 +252,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 12,
     elevation: 6,
+    marginBottom: 20, // Add spacing from bottom
   },
   donateButtonText: {
     fontSize: 18,

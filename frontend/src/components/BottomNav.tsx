@@ -28,7 +28,7 @@ export default function BottomNav({ activePage }: BottomNavProps) {
       styles.navLabel,
       { 
         color: activePage === page ? COLORS.textMain : COLORS.inactive,
-        fontWeight: activePage === page ? '700' : '500' 
+        fontWeight: activePage === page ? 700 : 500 
       }
     ];
   };
@@ -55,8 +55,8 @@ export default function BottomNav({ activePage }: BottomNavProps) {
         </Pressable>
 
         <Pressable onPress={() => router.push('/aboutus')} style={styles.navItem}>
-          <MaterialIcons name="info" size={26} color={getColor('about')} />
-          <Text style={getLabelStyle('about')}>About</Text>
+          <MaterialIcons name="info" size={26} color={getColor('aboutus')} />
+          <Text style={getLabelStyle('aboutus')}>About</Text>
         </Pressable>
       </View>
 

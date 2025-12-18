@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import BottomNav from '../src/components/BottomNav'; // <--- IMPORT ADDED
 
 const { width } = Dimensions.get('window');
 
@@ -28,7 +29,6 @@ const COLORS = {
 };
 
 // Ensure these paths are correct relative to this file
-// If your images are in 'assets/img', change paths to: require('../assets/img/Asim.jpg')
 const TEAM_MEMBERS = [
   { id: 1, name: 'Asim', role: 'Founder', img: require('../img/Asim.png') },
   { id: 2, name: 'Ashal', role: 'Tech Lead', img: require('../img/Ashal.png') },
@@ -112,7 +112,7 @@ export default function About() {
             horizontal 
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.teamScroll}
-            snapToInterval={114} // width (90) + margin (24)
+            snapToInterval={114} 
             decelerationRate="fast"
           >
             {TEAM_MEMBERS.map((member) => (
@@ -155,6 +155,10 @@ export default function About() {
           <Text style={styles.copyrightText}>© 2024 StrayMandu Initiative</Text>
         </View>
       </ScrollView>
+
+      {/* REUSABLE COMPONENT */}
+      <BottomNav activePage="aboutus" />
+
     </SafeAreaView>
   );
 }
@@ -189,7 +193,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 16,
-    paddingBottom: 40,
+    paddingBottom: 100, // <--- INCREASED PADDING so content isn't hidden by nav
   },
   heroContainer: {
     height: 320,
