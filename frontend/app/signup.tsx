@@ -130,7 +130,7 @@ export default function Signup() {
       });
 
       setTimeout(() => {
-        router.replace('/tabs/home');
+        router.replace('/home');
       }, 1500);
 
     } catch (err: any) {

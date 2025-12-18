@@ -28,7 +28,7 @@ export default function BottomNav({ activePage }: BottomNavProps) {
       styles.navLabel,
       { 
         color: activePage === page ? COLORS.textMain : COLORS.inactive,
-        fontWeight: activePage === page ? '700' : '500' 
+        fontWeight: activePage === page ? 700 : 500 
       }
     ];
   };
@@ -49,14 +49,14 @@ export default function BottomNav({ activePage }: BottomNavProps) {
         {/* Spacer for Floating Button */}
         <View style={{ width: 60 }} />
 
-        <Pressable onPress={() => router.push('/volunteer')} style={styles.navItem}>
+        <Pressable onPress={() => router.push('/donate')} style={styles.navItem}>
           <MaterialIcons name="volunteer-activism" size={26} color={getColor('donate')} />
           <Text style={getLabelStyle('donate')}>Donate</Text>
         </Pressable>
 
-        <Pressable onPress={() => router.push('/about')} style={styles.navItem}>
-          <MaterialIcons name="info" size={26} color={getColor('about')} />
-          <Text style={getLabelStyle('about')}>About</Text>
+        <Pressable onPress={() => router.push('/aboutus')} style={styles.navItem}>
+          <MaterialIcons name="info" size={26} color={getColor('aboutus')} />
+          <Text style={getLabelStyle('aboutus')}>About</Text>
         </Pressable>
       </View>
 
