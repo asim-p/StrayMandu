@@ -56,26 +56,28 @@ export default function Login() {
       setLoading(true);
       
       // 2. Firebase Login
-      // authService.login now accepts (email, password) as separate strings
       await authService.login(email.trim(), password);
 
       // 3. Navigation
-      // Firebase manages the session, so we just redirect the user
-      router.replace('/tabs/home'); 
+      // Since home.tsx is in the 'app/' folder, the route is '/home'
+      console.log("Login successful, redirecting to /home...");
+      router.replace('/home'); 
+
     } catch (err: any) {
       console.error('Login error:', err);
       
-      // 4. Firebase Specific Error Handling
       let friendlyMessage = 'Unable to log in. Please try again.';
       
-      if (err.includes('auth/invalid-credential')) {
-        friendlyMessage = 'Invalid email or password. Please check your credentials.';
-      } else if (err.includes('auth/user-not-found')) {
-        friendlyMessage = 'No account found with this email.';
-      } else if (err.includes('auth/wrong-password')) {
-        friendlyMessage = 'Incorrect password.';
-      } else if (err.includes('auth/too-many-requests')) {
-        friendlyMessage = 'Too many failed attempts. Please try again later.';
+      // Handle Firebase errors specifically
+      if (typeof err === 'string' || err.message) {
+        const errorMsg = typeof err === 'string' ? err : err.message;
+        if (errorMsg.includes('auth/invalid-credential') || errorMsg.includes('auth/user-not-found')) {
+          friendlyMessage = 'Invalid email or password.';
+        } else if (errorMsg.includes('auth/wrong-password')) {
+          friendlyMessage = 'Invalid password.';
+        } else if (errorMsg.includes('auth/too-many-requests')) {
+          friendlyMessage = 'Too many attempts. Try again later.';
+        }
       }
 
       Alert.alert('Login Failed', friendlyMessage);
@@ -96,6 +98,7 @@ export default function Login() {
           contentContainerStyle={[styles.scrollContent, { minHeight: height - 50 }]}
           showsVerticalScrollIndicator={false}
         >
+          {/* Header */}
           <View style={styles.header}>
             <Pressable onPress={() => router.back()} style={styles.headerLeft}>
               <View style={styles.logoCircle}>
@@ -118,6 +121,7 @@ export default function Login() {
             </View>
 
             <View style={styles.formContainer}>
+              {/* Email Input */}
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>Email Address</Text>
                 <View style={[styles.inputWrapper, emailFocused && styles.inputWrapperFocused]}>
@@ -141,6 +145,7 @@ export default function Login() {
                 </View>
               </View>
 
+              {/* Password Input */}
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>Password</Text>
                 <View style={[styles.inputWrapper, passwordFocused && styles.inputWrapperFocused]}>
@@ -174,6 +179,7 @@ export default function Login() {
                 </Pressable>
               </View>
 
+              {/* Login Button */}
               <Pressable 
                 style={({ pressed }) => [
                   styles.loginButton,

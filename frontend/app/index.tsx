@@ -194,7 +194,7 @@ export default function Home() {
               <View style={styles.navSection}>
                 <Pressable 
                   style={[styles.navItem, styles.navItemActive]}
-                  onPress={() => navigateTo('/')}
+                  onPress={() => navigateTo('/login')}
                 >
                   <Text style={[styles.navIcon, styles.navIconActive]}>🏠</Text>
                   <Text style={[styles.navText, styles.navTextActive]}>Home</Text>
@@ -202,7 +202,7 @@ export default function Home() {
 
                 <Pressable 
                   style={styles.navItem}
-                  onPress={() => navigateTo('/tabs/report')}
+                  onPress={() => navigateTo('/login')}
                 >
                   <Text style={styles.navIcon}>📍</Text>
                   <Text style={styles.navText}>Report a Stray</Text>
@@ -210,7 +210,7 @@ export default function Home() {
 
                 <Pressable 
                   style={styles.navItem}
-                  onPress={() => navigateTo('/tabs/reportdocs')}
+                  onPress={() => navigateTo('/login')}
                 >
                   <Text style={styles.navIcon}>💚</Text>
                   <Text style={styles.navText}>How You Can Help</Text>
@@ -218,19 +218,13 @@ export default function Home() {
 
                 <Pressable 
                   style={styles.navItem}
-                  onPress={() => navigateTo('/tabs/home')}
+                  onPress={() => navigateTo('/login')}
                 >
                   <Text style={styles.navIcon}>ℹ️</Text>
                   <Text style={styles.navText}>About Us</Text>
                 </Pressable>
 
-                <Pressable 
-                  style={styles.navItem}
-                  onPress={() => navigateTo('/tabs/home')}
-                >
-                  <Text style={styles.navIcon}>⚙️</Text>
-                  <Text style={styles.navText}>App Settings</Text>
-                </Pressable>
+                
               </View>
 
               {/* Bottom Section */}
