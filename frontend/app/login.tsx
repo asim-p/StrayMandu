@@ -38,10 +38,10 @@ export default function Login() {
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const [emailFocused, setEmailFocused] = useState(false);
   const [passwordFocused, setPasswordFocused] = useState(false);
-
   const [loading, setLoading] = useState(false);
   
   const handleLogin = async (): Promise<void> => {
+    // 1. Basic Validation
     if (!email?.trim() || !password) {
       Alert.alert('Validation', 'Please enter both email and password.');
       return;
@@ -54,18 +54,31 @@ export default function Login() {
   
     try {
       setLoading(true);
-      const result = await authService.login({ email: email.trim(), password });
-      // If authService returns token/user, it should store token itself.
-      // If it returns a token but doesn't store it, store it here (example):
-      // if (result?.token) await AsyncStorage.setItem('authToken', result.token);
+      
+      // 2. Firebase Login
+      // authService.login now accepts (email, password) as separate strings
+      await authService.login(email.trim(), password);
 
-      // Navigate to home and replace so user can't go back to login
-      router.replace('/tabs/home'); // Changed from '/' to '/tabs/home'
+      // 3. Navigation
+      // Firebase manages the session, so we just redirect the user
+      router.replace('/tabs/home'); 
     } catch (err: any) {
-      console.error('Login error', err);
-      const message =
-        err?.response?.data?.message || err?.message || 'Unable to log in — please try again.';
-      Alert.alert('Login failed', message);
+      console.error('Login error:', err);
+      
+      // 4. Firebase Specific Error Handling
+      let friendlyMessage = 'Unable to log in. Please try again.';
+      
+      if (err.includes('auth/invalid-credential')) {
+        friendlyMessage = 'Invalid email or password. Please check your credentials.';
+      } else if (err.includes('auth/user-not-found')) {
+        friendlyMessage = 'No account found with this email.';
+      } else if (err.includes('auth/wrong-password')) {
+        friendlyMessage = 'Incorrect password.';
+      } else if (err.includes('auth/too-many-requests')) {
+        friendlyMessage = 'Too many failed attempts. Please try again later.';
+      }
+
+      Alert.alert('Login Failed', friendlyMessage);
     } finally {
       setLoading(false);
     }
@@ -83,7 +96,6 @@ export default function Login() {
           contentContainerStyle={[styles.scrollContent, { minHeight: height - 50 }]}
           showsVerticalScrollIndicator={false}
         >
-          {/* Header - Fixed to match Signup.tsx */}
           <View style={styles.header}>
             <Pressable onPress={() => router.back()} style={styles.headerLeft}>
               <View style={styles.logoCircle}>
@@ -92,16 +104,11 @@ export default function Login() {
               <Text style={styles.appName}>StrayMandu</Text>
             </Pressable>
             
-            {/* Functional Back Button */}
-            <Pressable 
-                onPress={() => router.back()}
-                style={styles.backButton}
-            >
+            <Pressable onPress={() => router.back()} style={styles.backButton}>
               <MaterialIcons name="arrow-back" size={24} color="#374151" />
             </Pressable>
           </View>
 
-          {/* Main Content */}
           <View style={styles.mainContainer}>
             <View style={styles.welcomeSection}>
               <Text style={styles.title}>Welcome Back!</Text>
@@ -113,10 +120,7 @@ export default function Login() {
             <View style={styles.formContainer}>
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>Email Address</Text>
-                <View style={[
-                  styles.inputWrapper, 
-                  emailFocused && styles.inputWrapperFocused
-                ]}>
+                <View style={[styles.inputWrapper, emailFocused && styles.inputWrapperFocused]}>
                   <MaterialIcons 
                     name="alternate-email" 
                     size={20} 
@@ -139,10 +143,7 @@ export default function Login() {
 
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>Password</Text>
-                <View style={[
-                  styles.inputWrapper,
-                  passwordFocused && styles.inputWrapperFocused
-                ]}>
+                <View style={[styles.inputWrapper, passwordFocused && styles.inputWrapperFocused]}>
                   <MaterialIcons 
                     name="lock-outline" 
                     size={20} 
@@ -159,10 +160,7 @@ export default function Login() {
                     onFocus={() => setPasswordFocused(true)}
                     onBlur={() => setPasswordFocused(false)}
                   />
-                  <Pressable 
-                    onPress={() => setIsPasswordVisible(!isPasswordVisible)}
-                    style={styles.eyeIcon}
-                  >
+                  <Pressable onPress={() => setIsPasswordVisible(!isPasswordVisible)} style={styles.eyeIcon}>
                     <MaterialIcons 
                       name={isPasswordVisible ? "visibility" : "visibility-off"} 
                       size={20} 
@@ -196,12 +194,7 @@ export default function Login() {
               <View style={styles.dividerLine} />
             </View>
 
-            <Pressable 
-              style={({ pressed }) => [
-                styles.googleButton,
-                pressed && styles.buttonPressed
-              ]}
-            >
+            <Pressable style={({ pressed }) => [styles.googleButton, pressed && styles.buttonPressed]}>
               <AntDesign name="google" size={20} color="#DB4437" />
               <Text style={styles.googleButtonText}>Log in with Google</Text>
             </Pressable>
@@ -213,7 +206,6 @@ export default function Login() {
               <Text style={styles.signupText}>Sign up</Text>
             </Pressable>
           </View>
-
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
