@@ -11,13 +11,12 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
-  Switch,
   Dimensions
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
-import { MaterialIcons, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient'; // For the fades
+import { MaterialIcons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient'; 
 import { auth } from '../src/config/firebase';
 
 // Services
@@ -57,19 +56,56 @@ export default function ReportScreen() {
   const [location, setLocation] = useState<LocationData | null>(null);
   const [selectedImages, setSelectedImages] = useState<string[]>([]);
 
-  // --- Logic ---
-  const pickImage = async () => {
-    const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (permissionResult.granted === false) {
-      Alert.alert('Permission needed', 'Camera roll access is required!');
+  // --- Image Logic (Camera + Gallery) ---
+
+  // 1. The Menu Handler
+  const handleImagePick = () => {
+    Alert.alert(
+      'Upload Photo',
+      'Choose a source',
+      [
+        { text: 'Camera', onPress: takePhoto },
+        { text: 'Gallery', onPress: pickFromGallery },
+        { text: 'Cancel', style: 'cancel' },
+      ]
+    );
+  };
+
+  // 2. Camera Function
+  const takePhoto = async () => {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission Denied', 'Camera access is required.');
       return;
     }
+
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [4, 3],
+      quality: 0.5,
+    });
+
+    if (!result.canceled) {
+      setSelectedImages(prev => [...prev, result.assets[0].uri]);
+    }
+  };
+
+  // 3. Gallery Function
+  const pickFromGallery = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission Denied', 'Gallery access is required.');
+      return;
+    }
+
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
       aspect: [4, 3],
       quality: 0.5,
     });
+
     if (!result.canceled) {
       setSelectedImages(prev => [...prev, result.assets[0].uri]);
     }
@@ -79,6 +115,7 @@ export default function ReportScreen() {
     setSelectedImages(prev => prev.filter((_, index) => index !== indexToRemove));
   };
 
+  // --- Submission Logic ---
   const handleSubmit = async () => {
     if (!location) return Alert.alert('Location Missing', 'Please pick a location on the map.');
     if (!breed.trim()) return Alert.alert('Missing Info', 'Please specify a breed.');
@@ -308,12 +345,12 @@ export default function ReportScreen() {
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Upload Photo</Text>
               <View style={styles.rowGrid}>
-                {/* Add Button */}
-                <Pressable style={styles.photoAddBtn} onPress={pickImage}>
+                {/* Add Button - UPDATED TO CALL handleImagePick */}
+                <Pressable style={styles.photoAddBtn} onPress={handleImagePick}>
                   <View style={styles.photoIconCircle}>
                     <MaterialIcons name="add-a-photo" size={20} color={COLORS.primary} />
                   </View>
-                  <Text style={styles.photoAddText}>Take Photo</Text>
+                  <Text style={styles.photoAddText}>Add Photo</Text>
                 </Pressable>
 
                 {/* Previews */}
