@@ -1,5 +1,6 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { API_URL } from '../config/api';
 
 /**
  * AUTHSERVICE.TS - Authentication Service
@@ -27,7 +28,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
  */
 
 // Get API URL from environment variables (backend URL)
-const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5000';
+const BASE = API_URL;
 
 /**
  * TypeScript Interface: What data the login request expects
@@ -60,7 +61,7 @@ interface AuthResponse {
  * - Cleaner code
  */
 const api = axios.create({
-  baseURL: API_URL,
+  baseURL: BASE,
   timeout: 10000,  // Wait 10 seconds max for response
 });
 
@@ -191,11 +192,11 @@ export const authService = {
     password: string;
     name: string;
     phone?: string;
-    user_type: 'reporter' | 'tender';
+    user_type: 'volunteer' | 'organization';
   }): Promise<AuthResponse> => {
     try {
       // Send signup request to backend
-      const response = await api.post<AuthResponse>('/api/users/signup', userData);
+      const response = await api.post<AuthResponse>('/api/users/register', userData);
       
       // Auto-login: save token so user is immediately logged in
       await AsyncStorage.setItem('authToken', response.data.token);

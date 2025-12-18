@@ -11,9 +11,12 @@ import {
   Platform,
   ScrollView,
   useWindowDimensions,
+  Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { authService } from '../src/services/authService'; 
 import { MaterialIcons, AntDesign, Feather } from '@expo/vector-icons';
+import StyledAlert from '../src/components/Alert';
 
 // Define theme colors for consistency
 const COLORS = {
@@ -26,6 +29,7 @@ const COLORS = {
   radioBorder: '#D1D5DB',
   googleBorder: '#E5E7EB',
 };
+
 
 // --- Custom Component for User Type Selection ---
 interface UserTypeSelectorProps {
@@ -106,15 +110,113 @@ export default function Signup() {
   const [passwordFocused, setPasswordFocused] = useState(false);
   const [confirmPasswordFocused, setConfirmPasswordFocused] = useState(false);
 
-  const handleSignup = () => {
-    // Add validation and registration logic here
-    console.log('Signup attempt:', { name, email, userType, phoneNumber });
-    if (password !== confirmPassword) {
-        alert("Passwords do not match!");
-        return;
+  // Add this state near other useState hooks:
+  const [loading, setLoading] = useState(false);
+
+  // Add alert state
+  const [alertState, setAlertState] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    type: 'error' | 'success' | 'warning' | 'info';
+  }>({
+    visible: false,
+    title: '',
+    message: '',
+    type: 'info',
+  });
+
+  // Replace handleSignup with this:
+  const handleSignup = async (): Promise<void> => {
+    // Validation
+    if (!name?.trim()) {
+      setAlertState({
+        visible: true,
+        title: 'Name Required',
+        message: 'Please enter your name.',
+        type: 'warning',
+      });
+      return;
     }
-    // For demo, navigate to the main app dashboard after successful signup
-    router.replace('/'); 
+    if (!email?.trim()) {
+      setAlertState({
+        visible: true,
+        title: 'Email Required',
+        message: 'Please enter your email.',
+        type: 'warning',
+      });
+      return;
+    }
+    const emailRegex = /\S+@\S+\.\S+/;
+    if (!emailRegex.test(email.trim())) {
+      setAlertState({
+        visible: true,
+        title: 'Invalid Email',
+        message: 'Please enter a valid email address.',
+        type: 'warning',
+      });
+      return;
+    }
+    if (password.length < 6) {
+      setAlertState({
+        visible: true,
+        title: 'Password Error',
+        message: 'Password must be at least 6 characters.',
+        type: 'warning',
+      });
+      return;
+    }
+    if (password !== confirmPassword) {
+      setAlertState({
+        visible: true,
+        title: 'Password Error',
+        message: 'Passwords do not match!',
+        type: 'warning',
+      });
+      return;
+    }
+
+    try {
+      setLoading(true);
+      
+      // const userTypeMap = {
+      //   volunteer: 'reporter',
+      //   organization: 'tender'
+      // };
+
+      const result = await authService.register({
+        email: email.trim(),
+        password,
+        name: name.trim(),
+        phone: phoneNumber?.trim() || undefined,
+        user_type: userType,
+      });
+
+      // Success alert
+      setAlertState({
+        visible: true,
+        title: 'Success!',
+        message: 'Account created successfully!',
+        type: 'success',
+      });
+
+      // Navigate after showing success
+      setTimeout(() => {
+        router.replace('/tabs/home'); // Changed from '/' to '/tabs/home'
+      }, 1500);
+    } catch (err: any) {
+      console.error('Signup error', err);
+      const message =
+        err?.response?.data?.message || err?.message || 'Unable to create account — please try again.';
+      setAlertState({
+        visible: true,
+        title: 'Signup Failed',
+        message: message,
+        type: 'error',
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -325,11 +427,15 @@ export default function Signup() {
               <Pressable 
                 style={({ pressed }) => [
                   styles.signupButton,
-                  pressed && styles.buttonPressed
+                  pressed && styles.buttonPressed,
+                  loading && { opacity: 0.6 }
                 ]}
                 onPress={handleSignup}
+                disabled={loading}
               >
-                <Text style={styles.signupButtonText}>Create Account</Text>
+                <Text style={styles.signupButtonText}>
+                  {loading ? 'Creating Account...' : 'Create Account'}
+                </Text>
                 <MaterialIcons name="arrow-forward" size={20} color="#121811" />
               </Pressable>
 
@@ -365,6 +471,14 @@ export default function Signup() {
 
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <StyledAlert
+        visible={alertState.visible}
+        title={alertState.title}
+        message={alertState.message}
+        type={alertState.type}
+        onDismiss={() => setAlertState({ ...alertState, visible: false })}
+      />
     </SafeAreaView>
   );
 }

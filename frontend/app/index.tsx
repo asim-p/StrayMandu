@@ -12,6 +12,7 @@ import {
   Animated,
   Dimensions,
 } from 'react-native';
+
 import { useRouter, type Href } from 'expo-router';
 
 const { width } = Dimensions.get('window');
@@ -112,7 +113,7 @@ export default function Home() {
                 styles.primaryButton,
                 pressed && styles.buttonPressed
               ]}
-              onPress={() => router.push('/report')}
+              onPress={() => router.push('/tabs/report')}
             >
               <Text style={styles.locationIcon}>📍</Text>
               <Text style={styles.primaryButtonText}>Report a Stray</Text>
@@ -123,7 +124,7 @@ export default function Home() {
                 styles.secondaryButton,
                 pressed && styles.buttonPressed
               ]}
-              onPress={() => router.push('/reportdocs')}
+              onPress={() => router.push('/tabs/reportdocs')}
             >
               <Text style={styles.secondaryButtonText}>How You Can Help</Text>
             </Pressable>
@@ -201,7 +202,7 @@ export default function Home() {
 
                 <Pressable 
                   style={styles.navItem}
-                  onPress={() => navigateTo('/report')}
+                  onPress={() => navigateTo('/tabs/report')}
                 >
                   <Text style={styles.navIcon}>📍</Text>
                   <Text style={styles.navText}>Report a Stray</Text>
@@ -209,7 +210,7 @@ export default function Home() {
 
                 <Pressable 
                   style={styles.navItem}
-                  onPress={() => navigateTo('/reportdocs')}
+                  onPress={() => navigateTo('/tabs/reportdocs')}
                 >
                   <Text style={styles.navIcon}>💚</Text>
                   <Text style={styles.navText}>How You Can Help</Text>
@@ -217,7 +218,7 @@ export default function Home() {
 
                 <Pressable 
                   style={styles.navItem}
-                  onPress={() => navigateTo('/home')}
+                  onPress={() => navigateTo('/tabs/home')}
                 >
                   <Text style={styles.navIcon}>ℹ️</Text>
                   <Text style={styles.navText}>About Us</Text>
@@ -225,7 +226,7 @@ export default function Home() {
 
                 <Pressable 
                   style={styles.navItem}
-                  onPress={() => navigateTo('/home')}
+                  onPress={() => navigateTo('/tabs/home')}
                 >
                   <Text style={styles.navIcon}>⚙️</Text>
                   <Text style={styles.navText}>App Settings</Text>

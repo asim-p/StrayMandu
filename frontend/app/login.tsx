@@ -58,9 +58,9 @@ export default function Login() {
       // If authService returns token/user, it should store token itself.
       // If it returns a token but doesn't store it, store it here (example):
       // if (result?.token) await AsyncStorage.setItem('authToken', result.token);
-  
+
       // Navigate to home and replace so user can't go back to login
-      router.replace('/');
+      router.replace('/tabs/home'); // Changed from '/' to '/tabs/home'
     } catch (err: any) {
       console.error('Login error', err);
       const message =
