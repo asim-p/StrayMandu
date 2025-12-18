@@ -8,14 +8,15 @@ import {
   Platform,
   ActivityIndicator,
   StatusBar,
-  TextInput, // Added TextInput
-  Alert,     // Added Alert for errors
-  Keyboard   // To dismiss keyboard
+  TextInput, 
+  Alert,     
+  Keyboard
 } from 'react-native';
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
+import BottomNav from '../src/components/BottomNav'; 
 
 const { width, height } = Dimensions.get('window');
 
@@ -27,7 +28,6 @@ const COLORS = {
   textSub: '#5c6f57',
 };
 
-// Dummy Data
 const DUMMY_REPORTS = [
   { id: 1, title: 'Injured Dog', type: 'Medical', lat: 27.7172, long: 85.3240, desc: 'Leg injury, needs help.' },
   { id: 2, title: 'Lost Puppy', type: 'Lost', lat: 27.7120, long: 85.3130, desc: 'Black puppy, red collar.' },
@@ -42,11 +42,10 @@ export default function MapScreen() {
   const [selectedReport, setSelectedReport] = useState<typeof DUMMY_REPORTS[0] | null>(null);
   const [tracksViewChanges, setTracksViewChanges] = useState(true);
 
-  // New State for Search
+  // Search State
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
 
-  // 1. Get User Location on Mount
   useEffect(() => {
     (async () => {
       let { status } = await Location.requestForegroundPermissionsAsync();
@@ -72,7 +71,6 @@ export default function MapScreen() {
     return () => clearTimeout(timer);
   }, []);
 
-  // 2. Search Function
   const handleSearch = async () => {
     if (!searchQuery.trim()) return;
 
@@ -85,7 +83,6 @@ export default function MapScreen() {
       if (geocodedLocation.length > 0) {
         const { latitude, longitude } = geocodedLocation[0];
         
-        // Animate map to the searched location
         mapRef.current?.animateToRegion({
           latitude,
           longitude,
@@ -109,14 +106,14 @@ export default function MapScreen() {
 
   const handleMapPress = () => {
     setSelectedReport(null);
-    Keyboard.dismiss(); // Dismiss keyboard if user clicks map
+    Keyboard.dismiss();
   };
 
   return (
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
       
-      {/* Top Navigation Bar with Functional Search */}
+      {/* Top Navigation Bar */}
       <View style={styles.topBar}>
         <Pressable onPress={() => router.back()} style={styles.backButton}>
           <MaterialIcons name="arrow-back" size={24} color={COLORS.textMain} />
@@ -130,7 +127,7 @@ export default function MapScreen() {
             style={styles.searchInput}
             value={searchQuery}
             onChangeText={setSearchQuery}
-            onSubmitEditing={handleSearch} // Trigger search on "Enter"
+            onSubmitEditing={handleSearch}
             returnKeyType="search"
           />
           {isSearching && <ActivityIndicator size="small" color={COLORS.primary} style={{ marginLeft: 8 }} />}
@@ -191,7 +188,7 @@ export default function MapScreen() {
               latitudeDelta: 0.01,
               longitudeDelta: 0.01,
             });
-            setSearchQuery(''); // Clear search when recentering
+            setSearchQuery('');
           }
         }}
       >
@@ -218,285 +215,37 @@ export default function MapScreen() {
         </View>
       )}
 
-      {/* Bottom Navigation */}
-      <View style={styles.bottomNavContainer}>
-        <View style={styles.bottomNav}>
-          <Pressable onPress={() => router.push('/home')} style={styles.navItem}>
-            <MaterialIcons name="home" size={26} color="#9CA3AF" />
-            <Text style={styles.navLabel}>Home</Text>
-          </Pressable>
-
-          <Pressable style={styles.navItem}>
-            <MaterialIcons name="map" size={26} color={COLORS.primary} />
-            <Text style={[styles.navLabel, { color: COLORS.textMain, fontWeight: '700' }]}>Map</Text>
-          </Pressable>
-
-          <View style={{ width: 60 }} />
-
-          <Pressable onPress={() => router.push('/volunteer')} style={styles.navItem}>
-            <MaterialIcons name="volunteer-activism" size={26} color="#9CA3AF" />
-            <Text style={styles.navLabel}>Donate</Text>
-          </Pressable>
-
-          <Pressable onPress={() => router.push('/about')} style={styles.navItem}>
-            <MaterialIcons name="info" size={26} color="#9CA3AF" />
-            <Text style={styles.navLabel}>About</Text>
-          </Pressable>
-        </View>
-
-        <View style={styles.floatingButtonContainer}>
-          <Pressable 
-            onPress={() => router.push('/report')}
-            style={({pressed}) => [styles.floatingButton, pressed && { transform: [{scale: 0.95}] }]}
-          >
-            <MaterialIcons name="add" size={32} color="#121811" />
-          </Pressable>
-          <Text style={styles.floatingLabel}>Report</Text>
-        </View>
-      </View>
+      {/* REUSABLE COMPONENT */}
+      <BottomNav activePage="map" />
 
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.background,
-  },
-  map: {
-    width: width,
-    height: height,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  
-  /* Top Bar */
-  topBar: {
-    position: 'absolute',
-    top: Platform.OS === 'ios' ? 60 : 50,
-    left: 16,
-    right: 16,
-    flexDirection: 'row',
-    zIndex: 10,
-    gap: 12,
-  },
-  backButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: COLORS.surface,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOpacity: 0.1,
-    elevation: 4,
-  },
-  searchBar: {
-    flex: 1,
-    height: 44,
-    backgroundColor: COLORS.surface,
-    borderRadius: 22,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    shadowColor: '#000',
-    shadowOpacity: 0.1,
-    elevation: 4,
-  },
-  searchInput: {
-    flex: 1,
-    height: '100%',
-    color: COLORS.textMain,
-    fontSize: 14,
-  },
-
-  /* Custom Marker */
-  markerContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 4, 
-  },
-  markerBubble: {
-    width: 40, 
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: COLORS.primary,
-    borderWidth: 2,
-    borderColor: '#FFF',
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
-  },
-  markerArrow: {
-    width: 0,
-    height: 0,
-    borderLeftWidth: 6,
-    borderRightWidth: 6,
-    borderTopWidth: 8,
-    borderLeftColor: 'transparent',
-    borderRightColor: 'transparent',
-    borderTopColor: COLORS.primary,
-    marginTop: -2, 
-    shadowColor: '#000',
-    shadowOpacity: 0.1, 
-    elevation: 2,
-  },
-
-  /* Recenter Button */
-  recenterButton: {
-    position: 'absolute',
-    right: 16,
-    bottom: 250, 
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: COLORS.surface,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOpacity: 0.15,
-    elevation: 5,
-    zIndex: 20, 
-  },
-
-  /* Bottom Card */
-  bottomCard: {
-    position: 'absolute',
-    bottom: 110, 
-    left: 16,
-    right: 16,
-    backgroundColor: COLORS.surface,
-    borderRadius: 20,
-    padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    elevation: 10,
-    zIndex: 20,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  cardTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: COLORS.textMain,
-  },
-  cardSubtitle: {
-    fontSize: 12,
-    color: COLORS.textSub,
-    fontWeight: '600',
-  },
-  cardIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(55,236,19,0.1)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  cardDesc: {
-    fontSize: 14,
-    color: '#6B7280',
-    marginBottom: 16,
-  },
-  cardButton: {
-    backgroundColor: COLORS.primary,
-    paddingVertical: 12,
-    borderRadius: 12,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 8,
-  },
-  cardButtonText: {
-    fontWeight: '700',
-    color: '#121811',
-  },
-
-  /* Bottom Navigation Styles */
-  bottomNavContainer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: 'transparent',
-    zIndex: 30, 
-  },
-  bottomNav: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: '#FFF',
-    borderTopWidth: 1,
-    borderTopColor: '#F3F4F6',
-    paddingHorizontal: 16,
-    height: 80,
-    paddingBottom: 10,
-  },
-  navItem: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    flex: 1,
-    gap: 4,
-  },
-  navLabel: {
-    fontSize: 10,
-    fontWeight: '500',
-    color: '#9CA3AF',
-  },
-  floatingButtonContainer: {
-    position: 'absolute',
-    top: -30, 
-    left: width / 2 - 30,
-    alignItems: 'center',
-  },
-  floatingButton: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: COLORS.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 4,
-    borderColor: COLORS.background, 
-    shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.4,
-    shadowRadius: 10,
-    elevation: 10,
-  },
-  floatingLabel: {
-    fontSize: 10,
-    fontWeight: '500',
-    color: COLORS.textMain,
-    marginTop: 6,
-  },
+  container: { flex: 1, backgroundColor: COLORS.background },
+  map: { width: width, height: height },
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  topBar: { position: 'absolute', top: Platform.OS === 'ios' ? 60 : 50, left: 16, right: 16, flexDirection: 'row', zIndex: 10, gap: 12 },
+  backButton: { width: 44, height: 44, borderRadius: 22, backgroundColor: COLORS.surface, justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.1, elevation: 4 },
+  searchBar: { flex: 1, height: 44, backgroundColor: COLORS.surface, borderRadius: 22, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, shadowColor: '#000', shadowOpacity: 0.1, elevation: 4 },
+  searchInput: { flex: 1, height: '100%', color: COLORS.textMain, fontSize: 14 },
+  markerContainer: { alignItems: 'center', justifyContent: 'center', padding: 4 },
+  markerBubble: { width: 40, height: 40, borderRadius: 20, backgroundColor: COLORS.primary, borderWidth: 2, borderColor: '#FFF', justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 3.84, elevation: 5 },
+  markerArrow: { width: 0, height: 0, borderLeftWidth: 6, borderRightWidth: 6, borderTopWidth: 8, borderLeftColor: 'transparent', borderRightColor: 'transparent', borderTopColor: COLORS.primary, marginTop: -2, shadowColor: '#000', shadowOpacity: 0.1, elevation: 2 },
+  recenterButton: { position: 'absolute', right: 16, bottom: 250, width: 48, height: 48, borderRadius: 24, backgroundColor: COLORS.surface, justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.15, elevation: 5, zIndex: 20 },
+  bottomCard: { position: 'absolute', bottom: 110, left: 16, right: 16, backgroundColor: COLORS.surface, borderRadius: 20, padding: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, elevation: 10, zIndex: 20 },
+  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
+  cardTitle: { fontSize: 18, fontWeight: '700', color: COLORS.textMain },
+  cardSubtitle: { fontSize: 12, color: COLORS.textSub, fontWeight: '600' },
+  cardIcon: { width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(55,236,19,0.1)', justifyContent: 'center', alignItems: 'center' },
+  cardDesc: { fontSize: 14, color: '#6B7280', marginBottom: 16 },
+  cardButton: { backgroundColor: COLORS.primary, paddingVertical: 12, borderRadius: 12, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8 },
+  cardButtonText: { fontWeight: '700', color: '#121811' },
 });
 
 const mapStyle = [
-  {
-    "featureType": "poi",
-    "elementType": "labels.text",
-    "stylers": [{ "visibility": "off" }]
-  },
-  {
-    "featureType": "poi.business",
-    "stylers": [{ "visibility": "off" }]
-  },
-  {
-    "featureType": "road",
-    "elementType": "geometry",
-    "stylers": [{ "lightness": 100 }, { "visibility": "simplified" }]
-  }
+  { "featureType": "poi", "elementType": "labels.text", "stylers": [{ "visibility": "off" }] },
+  { "featureType": "poi.business", "stylers": [{ "visibility": "off" }] },
+  { "featureType": "road", "elementType": "geometry", "stylers": [{ "lightness": 100 }, { "visibility": "simplified" }] }
 ];
