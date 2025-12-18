@@ -7,7 +7,10 @@ import {
   Pressable,
   Platform,
   ActivityIndicator,
-  StatusBar
+  StatusBar,
+  TextInput, // Added TextInput
+  Alert,     // Added Alert for errors
+  Keyboard   // To dismiss keyboard
 } from 'react-native';
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import * as Location from 'expo-location';
@@ -37,9 +40,11 @@ export default function MapScreen() {
   
   const [location, setLocation] = useState<Location.LocationObject | null>(null);
   const [selectedReport, setSelectedReport] = useState<typeof DUMMY_REPORTS[0] | null>(null);
-  
-  // Optimization: Allow markers to render once before freezing them (Prevents Android Crash)
   const [tracksViewChanges, setTracksViewChanges] = useState(true);
+
+  // New State for Search
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isSearching, setIsSearching] = useState(false);
 
   // 1. Get User Location on Mount
   useEffect(() => {
@@ -60,7 +65,6 @@ export default function MapScreen() {
       }
     })();
     
-    // Stop tracking view changes after 1 second to improve performance & prevent crashes
     const timer = setTimeout(() => {
       setTracksViewChanges(false);
     }, 1000);
@@ -68,30 +72,72 @@ export default function MapScreen() {
     return () => clearTimeout(timer);
   }, []);
 
+  // 2. Search Function
+  const handleSearch = async () => {
+    if (!searchQuery.trim()) return;
+
+    setIsSearching(true);
+    Keyboard.dismiss();
+
+    try {
+      const geocodedLocation = await Location.geocodeAsync(searchQuery);
+
+      if (geocodedLocation.length > 0) {
+        const { latitude, longitude } = geocodedLocation[0];
+        
+        // Animate map to the searched location
+        mapRef.current?.animateToRegion({
+          latitude,
+          longitude,
+          latitudeDelta: 0.015,
+          longitudeDelta: 0.015,
+        });
+      } else {
+        Alert.alert('Location not found', 'Please try a different search term.');
+      }
+    } catch (error) {
+      console.log(error);
+      Alert.alert('Error', 'Something went wrong while searching.');
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
   const handleMarkerPress = (report: typeof DUMMY_REPORTS[0]) => {
     setSelectedReport(report);
   };
 
   const handleMapPress = () => {
     setSelectedReport(null);
+    Keyboard.dismiss(); // Dismiss keyboard if user clicks map
   };
 
   return (
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
       
-      {/* 2. Top Navigation Bar */}
+      {/* Top Navigation Bar with Functional Search */}
       <View style={styles.topBar}>
         <Pressable onPress={() => router.back()} style={styles.backButton}>
           <MaterialIcons name="arrow-back" size={24} color={COLORS.textMain} />
         </Pressable>
+
         <View style={styles.searchBar}>
-          <MaterialIcons name="search" size={20} color={COLORS.textSub} />
-          <Text style={styles.searchText}>Search Kathmandu...</Text>
+          <MaterialIcons name="search" size={20} color={COLORS.textSub} style={{ marginRight: 8 }} />
+          <TextInput
+            placeholder="Search location..."
+            placeholderTextColor={COLORS.textSub}
+            style={styles.searchInput}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            onSubmitEditing={handleSearch} // Trigger search on "Enter"
+            returnKeyType="search"
+          />
+          {isSearching && <ActivityIndicator size="small" color={COLORS.primary} style={{ marginLeft: 8 }} />}
         </View>
       </View>
 
-      {/* 3. The Map */}
+      {/* The Map */}
       {!location ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={COLORS.primary} />
@@ -117,7 +163,6 @@ export default function MapScreen() {
             <Marker
               key={report.id}
               coordinate={{ latitude: report.lat, longitude: report.long }}
-              // Improved Crash Fix: Only track changes for the first second
               tracksViewChanges={tracksViewChanges}
               onPress={(e) => {
                 e.stopPropagation();
@@ -135,7 +180,7 @@ export default function MapScreen() {
         </MapView>
       )}
 
-      {/* 4. Recenter Button */}
+      {/* Recenter Button */}
       <Pressable 
         style={styles.recenterButton}
         onPress={() => {
@@ -146,13 +191,14 @@ export default function MapScreen() {
               latitudeDelta: 0.01,
               longitudeDelta: 0.01,
             });
+            setSearchQuery(''); // Clear search when recentering
           }
         }}
       >
         <MaterialIcons name="my-location" size={24} color={COLORS.primary} />
       </Pressable>
 
-      {/* 5. Bottom Info Card */}
+      {/* Bottom Info Card */}
       {selectedReport && (
         <View style={styles.bottomCard}>
           <View style={styles.cardHeader}>
@@ -172,7 +218,7 @@ export default function MapScreen() {
         </View>
       )}
 
-      {/* 6. Bottom Navigation */}
+      {/* Bottom Navigation */}
       <View style={styles.bottomNavContainer}>
         <View style={styles.bottomNav}>
           <Pressable onPress={() => router.push('/home')} style={styles.navItem}>
@@ -185,7 +231,6 @@ export default function MapScreen() {
             <Text style={[styles.navLabel, { color: COLORS.textMain, fontWeight: '700' }]}>Map</Text>
           </Pressable>
 
-          {/* Spacer for Floating Button */}
           <View style={{ width: 60 }} />
 
           <Pressable onPress={() => router.push('/volunteer')} style={styles.navItem}>
@@ -199,7 +244,6 @@ export default function MapScreen() {
           </Pressable>
         </View>
 
-        {/* Floating Report Button */}
         <View style={styles.floatingButtonContainer}>
           <Pressable 
             onPress={() => router.push('/report')}
@@ -263,17 +307,17 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     elevation: 4,
   },
-  searchText: {
-    marginLeft: 8,
-    color: COLORS.textSub,
+  searchInput: {
+    flex: 1,
+    height: '100%',
+    color: COLORS.textMain,
     fontSize: 14,
   },
 
-  /* Custom Marker - FINAL FIX */
+  /* Custom Marker */
   markerContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    // Removed fixed width/height to prevent clipping of shadows/edges
     padding: 4, 
   },
   markerBubble: {
@@ -285,7 +329,6 @@ const styles = StyleSheet.create({
     borderColor: '#FFF',
     justifyContent: 'center',
     alignItems: 'center',
-    // Shadow settings
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
@@ -302,7 +345,6 @@ const styles = StyleSheet.create({
     borderRightColor: 'transparent',
     borderTopColor: COLORS.primary,
     marginTop: -2, 
-    // Shadow for arrow
     shadowColor: '#000',
     shadowOpacity: 0.1, 
     elevation: 2,
