@@ -49,12 +49,12 @@ export default function BottomNav({ activePage }: BottomNavProps) {
         {/* Spacer for Floating Button */}
         <View style={{ width: 60 }} />
 
-        <Pressable onPress={() => router.push('/volunteer')} style={styles.navItem}>
+        <Pressable onPress={() => router.push('/donate')} style={styles.navItem}>
           <MaterialIcons name="volunteer-activism" size={26} color={getColor('donate')} />
           <Text style={getLabelStyle('donate')}>Donate</Text>
         </Pressable>
 
-        <Pressable onPress={() => router.push('/about')} style={styles.navItem}>
+        <Pressable onPress={() => router.push('/aboutus')} style={styles.navItem}>
           <MaterialIcons name="info" size={26} color={getColor('about')} />
           <Text style={getLabelStyle('about')}>About</Text>
         </Pressable>

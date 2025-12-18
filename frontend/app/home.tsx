@@ -8,12 +8,24 @@ import {
   Pressable,
   StyleSheet,
   StatusBar,
+  Image,
+  Dimensions
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import BottomNav from '../src/components/BottomNav'; // Import the component
+
+import { getAuth } from 'firebase/auth'; // or your firebase config file
+
+// Inside your component:
+const auth = getAuth();
+const user = auth.currentUser;
+
+// Create a fallback image in case the user hasn't set a profile pic yet
+const placeholderImage = 'https://via.placeholder.com/150'; 
+const profilePic = user?.photoURL ? { uri: user.photoURL } : require('../img/Asim.png');
 
 const COLORS = {
   primary: '#37ec13',
@@ -22,7 +34,10 @@ const COLORS = {
   textSub: '#5c6f57',
   danger: '#EF4444',
   warning: '#F97316',
+  white: '#FFFFFF',
 };
+
+const { width } = Dimensions.get('window');
 
 export default function Home() {
   const router = useRouter();
@@ -83,29 +98,39 @@ export default function Home() {
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" backgroundColor={COLORS.backgroundLight} />
 
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <View style={styles.avatarContainer}>
-            <ImageBackground
-              source={{ uri: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBwA8mbDnpc4KGlAtsEnWM9zeee9JKlQ1ylxt1kPXqscY8dWoaP0qHZgkyGvSmYk87fyHvLtzzrrtDitM-sJnKTRF_ClRnEiSxZxybQfvw2g5pSlBd7AIGApG2e-BKZ7DaxLSGCCFQsaz-xVEKQJmuPZxt-jfOSQeQtG38JEvDY4RjyPkppiCzuFcnuBJAzde7btSw7Zv5onQnDRYGxxq0b8w8lr9Rt6JWfY97wsHfLfMiPzXU64EyZzO2Q4nvRsSDcfpdog7jiZ-M' }}
-              style={styles.avatar}
-              imageStyle={{ borderRadius: 20 }}
-            />
-            <View style={styles.onlineBadge} />
-          </View>
-          <View>
-            <Text style={styles.greetingText}>{getGreeting()}</Text>
-            <Text style={styles.userName}>Namaste, {userName ?? 'User'} 👋</Text>
-          </View>
-        </View>
-        <Pressable 
-          style={styles.iconButton}
-          onPress={() => router.push('/notifications')}
-        >
-          <MaterialIcons name="notifications" size={24} color={COLORS.textMain} />
-        </Pressable>
-      </View>
+{/* Header */}
+<View style={styles.header}>
+  <View style={styles.headerLeft}>
+    {/* CLICKABLE AVATAR SECTION */}
+    <Pressable 
+      style={styles.avatarContainer} 
+      onPress={() => router.push('/profile')} 
+    >
+      <Image
+        // source pulls from Firebase photoURL, falls back to local asset
+        source={user?.photoURL ? { uri: user.photoURL } : require('../img/Asim.png')}
+        style={styles.avatar}
+      />
+      <View style={styles.onlineBadge} />
+    </Pressable>
+    
+    <View>
+      <Text style={styles.greetingText}>{getGreeting()}</Text>
+      {/* Pulling the display name directly from Firebase */}
+      <Text style={styles.userName}>
+        Namaste, {user?.displayName || userName || 'Hero'} 👋
+      </Text>
+    </View>
+  </View>
+  
+  <Pressable 
+    style={styles.iconButton}
+    onPress={() => router.push('/notifications')}
+  >
+    <MaterialIcons name="notifications" size={24} color={COLORS.textMain} />
+  </Pressable>
+</View>
+
 
       <ScrollView 
         style={styles.scrollView} 
