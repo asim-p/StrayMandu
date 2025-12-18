@@ -85,7 +85,7 @@ export default function Home() {
           </View>
           <View style={styles.greetingContainer}>
             <Text style={styles.greetingText}>{getGreeting()}</Text>
-            <Text style={styles.nameText}>Namaste, {userName ?? 'Aarav'} 👋</Text>
+            <Text style={styles.nameText}>Namaste, {userName ?? 'User'} 👋</Text>
           </View>
         </View>
 
