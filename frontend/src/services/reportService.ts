@@ -19,7 +19,12 @@ export interface DogReportData {
   condition: 'Neutral' | 'Healthy' | 'Injured' | 'Aggressive' | 'Unknown';
   description: string;
   imageUrls: string[]; // Array of Cloudinary URLs
-  status: 'pending' | 'resolved'; // To track if the dog has been helped
+  
+  // UPDATED: Expanded status options
+  status: 'pending' | 'ongoing' | 'resolved' | 'acknowledged';
+  
+  // NEW: Field for the rescuer, optional/null initially
+  rescuerID?: string | null; 
 }
 
 export const saveDogReport = async (data: DogReportData) => {
@@ -27,6 +32,8 @@ export const saveDogReport = async (data: DogReportData) => {
     // 'reports' is the name of the collection in Firestore
     const docRef = await addDoc(collection(db, 'reports'), {
       ...data,
+      // Ensure rescuerID is written to DB as null if not provided
+      rescuerID: data.rescuerID || null, 
       createdAt: serverTimestamp(), // Let Firebase handle the server-side timestamp
     });
     console.log("Report Document written with ID: ", docRef.id);

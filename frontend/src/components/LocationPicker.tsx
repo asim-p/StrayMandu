@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, StyleSheet, Alert, ActivityIndicator } from 'react-native';
 import MapView, { Marker, MapPressEvent, PROVIDER_GOOGLE } from 'react-native-maps';
 import * as Location from 'expo-location';
@@ -10,23 +10,21 @@ export interface LocationData {
 
 interface LocationPickerProps {
   onLocationPicked: (location: LocationData) => void;
+  incomingLocation?: LocationData | null; // <--- NEW PROP
 }
 
-export default function LocationPicker({ onLocationPicked }: LocationPickerProps) {
+export default function LocationPicker({ onLocationPicked, incomingLocation }: LocationPickerProps) {
+  const mapRef = useRef<MapView>(null); // <--- NEW REF
   const [pickedLocation, setPickedLocation] = useState<LocationData | null>(null);
   const [initialRegion, setInitialRegion] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // 1. AUTOMATICALLY GET LOCATION ON MOUNT
+  // 1. AUTOMATICALLY GET USER LOCATION ON MOUNT
   useEffect(() => {
     (async () => {
       try {
         const { status } = await Location.requestForegroundPermissionsAsync();
         if (status !== 'granted') {
-          Alert.alert(
-            'Permission Denied',
-            'Permission to access location was denied. The map will default to Kathmandu.'
-          );
           // Default fallback (Kathmandu)
           setInitialRegion({
             latitude: 27.7172,
@@ -63,6 +61,25 @@ export default function LocationPicker({ onLocationPicked }: LocationPickerProps
     })();
   }, []);
 
+  // 2. LISTEN FOR EXTERNAL SEARCH UPDATES (NEW)
+  useEffect(() => {
+    if (incomingLocation) {
+      // Update the marker
+      setPickedLocation(incomingLocation);
+      
+      // Move the map
+      mapRef.current?.animateToRegion({
+        latitude: incomingLocation.latitude,
+        longitude: incomingLocation.longitude,
+        latitudeDelta: 0.005,
+        longitudeDelta: 0.005,
+      }, 1000);
+
+      // Tell parent the location is set
+      onLocationPicked(incomingLocation);
+    }
+  }, [incomingLocation]);
+
   // Handle manual map taps
   const pickOnMapHandler = (event: MapPressEvent) => {
     const coords = event.nativeEvent.coordinate;
@@ -81,12 +98,13 @@ export default function LocationPicker({ onLocationPicked }: LocationPickerProps
   return (
     <View style={styles.container}>
       <MapView
+        ref={mapRef} // <--- ATTACH REF
         style={styles.map}
         initialRegion={initialRegion}
         onPress={pickOnMapHandler}
         provider={PROVIDER_GOOGLE} 
-        showsUserLocation={true} // Shows the blue dot for user's real position
-        showsMyLocationButton={false} // We hide the default button for a cleaner look
+        showsUserLocation={true} 
+        showsMyLocationButton={false} 
       >
         {pickedLocation && (
           <Marker 
@@ -101,7 +119,7 @@ export default function LocationPicker({ onLocationPicked }: LocationPickerProps
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1, // Fills the parent container (The Hero Section)
+    flex: 1, 
     backgroundColor: '#E5E7EB',
     justifyContent: 'center',
     alignItems: 'center',

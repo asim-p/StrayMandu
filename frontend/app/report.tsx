@@ -11,13 +11,15 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
-  Dimensions
+  Dimensions,
+  Keyboard // Import Keyboard
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient'; 
 import { auth } from '../src/config/firebase';
+import * as Location from 'expo-location'; // Import Location for Geocoding
 
 // Services
 import LocationPicker, { LocationData } from '../src/components/LocationPicker';
@@ -26,9 +28,8 @@ import { saveDogReport, DogReportData } from '../src/services/reportService';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
-// 🎨 Theme Constants from your HTML
 const COLORS = {
-  primary: '#37ec13', // The bright green
+  primary: '#37ec13', 
   primaryDark: '#2ed60e',
   backgroundLight: '#f6f8f6',
   surface: '#FFFFFF',
@@ -44,6 +45,11 @@ export default function ReportScreen() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
 
+  // --- Search State ---
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchedLocation, setSearchedLocation] = useState<LocationData | null>(null);
+
   // --- Form State ---
   const [emergency, setEmergency] = useState(false);
   const [name, setName] = useState('');
@@ -56,9 +62,33 @@ export default function ReportScreen() {
   const [location, setLocation] = useState<LocationData | null>(null);
   const [selectedImages, setSelectedImages] = useState<string[]>([]);
 
-  // --- Image Logic (Camera + Gallery) ---
+  // --- Search Logic ---
+  const handleSearch = async () => {
+    if (!searchQuery.trim()) return;
 
-  // 1. The Menu Handler
+    setIsSearching(true);
+    Keyboard.dismiss();
+
+    try {
+      const geocodedLocation = await Location.geocodeAsync(searchQuery);
+
+      if (geocodedLocation.length > 0) {
+        const { latitude, longitude } = geocodedLocation[0];
+        // This triggers the LocationPicker to move via props
+        setSearchedLocation({ latitude, longitude });
+        setLocation({ latitude, longitude }); // Also update form data immediately
+      } else {
+        Alert.alert('Not found', 'Could not find that location.');
+      }
+    } catch (error) {
+      console.log(error);
+      Alert.alert('Error', 'Search failed. Please try again.');
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  // --- Image Logic ---
   const handleImagePick = () => {
     Alert.alert(
       'Upload Photo',
@@ -71,44 +101,34 @@ export default function ReportScreen() {
     );
   };
 
-  // 2. Camera Function
   const takePhoto = async () => {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== 'granted') {
       Alert.alert('Permission Denied', 'Camera access is required.');
       return;
     }
-
     const result = await ImagePicker.launchCameraAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
       aspect: [4, 3],
       quality: 0.5,
     });
-
-    if (!result.canceled) {
-      setSelectedImages(prev => [...prev, result.assets[0].uri]);
-    }
+    if (!result.canceled) setSelectedImages(prev => [...prev, result.assets[0].uri]);
   };
 
-  // 3. Gallery Function
   const pickFromGallery = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
       Alert.alert('Permission Denied', 'Gallery access is required.');
       return;
     }
-
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
       aspect: [4, 3],
       quality: 0.5,
     });
-
-    if (!result.canceled) {
-      setSelectedImages(prev => [...prev, result.assets[0].uri]);
-    }
+    if (!result.canceled) setSelectedImages(prev => [...prev, result.assets[0].uri]);
   };
 
   const removeImage = (indexToRemove: number) => {
@@ -157,9 +177,6 @@ export default function ReportScreen() {
     }
   };
 
-  // --- UI Components ---
-
-  // Custom Gender Card to match HTML grid
   const GenderCard = ({ type, icon, selected }: any) => (
     <Pressable 
       onPress={() => setGender(type)}
@@ -191,14 +208,17 @@ export default function ReportScreen() {
   return (
     <View style={styles.mainContainer}>
       
-      {/* 1. HERO MAP SECTION (Top 45%) */}
+      {/* 1. HERO MAP SECTION */}
       <View style={styles.mapContainer}>
-        {/* We reuse your LocationPicker but we'll style it to look like the hero background */}
-        <LocationPicker onLocationPicked={setLocation} />
+        {/* Pass searchedLocation to LocationPicker to trigger animation */}
+        <LocationPicker 
+          onLocationPicked={setLocation} 
+          incomingLocation={searchedLocation}
+        />
         
-        {/* Gradient Overlay for Header */}
+        {/* Gradient Header */}
         <LinearGradient
-          colors={['rgba(0,0,0,0.6)', 'transparent']}
+          colors={['rgba(0,0,0,0.7)', 'transparent']}
           style={styles.headerGradient}
         >
           <View style={styles.headerRow}>
@@ -210,7 +230,24 @@ export default function ReportScreen() {
           </View>
         </LinearGradient>
 
-        {/* Floating "Pinpoint" Label (Visual flourish from HTML) */}
+        {/* --- SEARCH BAR --- */}
+        <View style={styles.searchBarContainer}>
+          <View style={styles.searchBar}>
+            <MaterialIcons name="search" size={20} color={COLORS.textGray} />
+            <TextInput
+              placeholder="Search location (e.g. Patan)"
+              placeholderTextColor={COLORS.textGray}
+              style={styles.searchInput}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              onSubmitEditing={handleSearch}
+              returnKeyType="search"
+            />
+            {isSearching && <ActivityIndicator size="small" color={COLORS.primary} />}
+          </View>
+        </View>
+
+        {/* Floating Pinpoint Label (Only show if not set yet, or just for visual flair) */}
         {!location && (
           <View style={styles.centerPinContainer}>
              <View style={styles.pulseCircle} />
@@ -224,9 +261,8 @@ export default function ReportScreen() {
         )}
       </View>
 
-      {/* 2. FORM CONTENT (Bottom Sheet Style) */}
+      {/* 2. FORM CONTENT */}
       <View style={styles.bottomSheetContainer}>
-        {/* Handle Bar */}
         <View style={styles.handleBarContainer}>
           <View style={styles.handleBar} />
         </View>
@@ -236,7 +272,6 @@ export default function ReportScreen() {
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.scrollContent}
           >
-            {/* Header Section */}
             <View style={styles.sectionHeader}>
               <Text style={styles.sheetTitle}>Dog Details</Text>
               <Text style={styles.sheetSubtitle}>Help us identify the stray dog.</Text>
@@ -268,29 +303,18 @@ export default function ReportScreen() {
               </View>
             </View>
 
-            {/* Name & Breed Grid */}
+            {/* Form Fields... (Identical to previous) */}
             <View style={styles.rowGrid}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.inputLabel}>Name <Text style={styles.labelHint}>(if known)</Text></Text>
-                <TextInput 
-                  style={styles.inputField} 
-                  placeholder="e.g. Bhunte" 
-                  value={name} 
-                  onChangeText={setName} 
-                />
+                <TextInput style={styles.inputField} placeholder="e.g. Bhunte" value={name} onChangeText={setName} />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.inputLabel}>Breed</Text>
-                <TextInput 
-                  style={styles.inputField} 
-                  placeholder="e.g. Mixed" 
-                  value={breed} 
-                  onChangeText={setBreed} 
-                />
+                <TextInput style={styles.inputField} placeholder="e.g. Mixed" value={breed} onChangeText={setBreed} />
               </View>
             </View>
 
-            {/* Gender Grid */}
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Gender</Text>
               <View style={styles.rowGrid}>
@@ -300,7 +324,6 @@ export default function ReportScreen() {
               </View>
             </View>
 
-            {/* Characteristics */}
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Color</Text>
               <TextInput style={styles.inputField} placeholder="e.g. Black with brown paws" value={color} onChangeText={setColor} />
@@ -310,7 +333,6 @@ export default function ReportScreen() {
               <TextInput style={styles.inputField} placeholder="e.g. Limping, Collared" value={characteristics} onChangeText={setCharacteristics} />
             </View>
 
-            {/* Condition Chips */}
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Condition</Text>
               <View style={styles.chipContainer}>
@@ -326,7 +348,6 @@ export default function ReportScreen() {
               </View>
             </View>
 
-            {/* Description */}
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Dog Description</Text>
               <View style={{ position: 'relative' }}>
@@ -341,11 +362,9 @@ export default function ReportScreen() {
               </View>
             </View>
 
-            {/* Photos */}
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Upload Photo</Text>
               <View style={styles.rowGrid}>
-                {/* Add Button - UPDATED TO CALL handleImagePick */}
                 <Pressable style={styles.photoAddBtn} onPress={handleImagePick}>
                   <View style={styles.photoIconCircle}>
                     <MaterialIcons name="add-a-photo" size={20} color={COLORS.primary} />
@@ -353,7 +372,6 @@ export default function ReportScreen() {
                   <Text style={styles.photoAddText}>Add Photo</Text>
                 </Pressable>
 
-                {/* Previews */}
                 {selectedImages.map((uri, idx) => (
                   <View key={idx} style={styles.photoPreviewWrapper}>
                     <Image source={{ uri }} style={styles.photoPreview} />
@@ -365,11 +383,9 @@ export default function ReportScreen() {
               </View>
             </View>
             
-            {/* Spacer for bottom button */}
             <View style={{ height: 100 }} />
           </ScrollView>
 
-          {/* Floating Submit Button (Bottom Gradient) */}
           <LinearGradient
             colors={['rgba(246,248,246,0)', COLORS.backgroundLight]}
             style={styles.bottomGradient}
@@ -402,7 +418,7 @@ const styles = StyleSheet.create({
   },
   // --- Map Section ---
   mapContainer: {
-    height: SCREEN_HEIGHT * 0.45, // Top 45%
+    height: SCREEN_HEIGHT * 0.45, 
     width: '100%',
     position: 'relative',
     backgroundColor: '#E5E7EB',
@@ -412,15 +428,17 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    height: 100,
-    paddingTop: 48, // Safe area for status bar
+    height: 120, // Increased height to cover search bar area slightly if needed
+    paddingTop: 48, 
     paddingHorizontal: 16,
     zIndex: 10,
+    pointerEvents: 'box-none' // Allows touching through the transparent parts
   },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    marginBottom: 16, // Space between header and search bar
   },
   backButton: {
     width: 40,
@@ -437,12 +455,40 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(0,0,0,0.3)',
     textShadowRadius: 4,
   },
-  // Center Pin Animation Mockup
+  // --- Search Bar Styles ---
+  searchBarContainer: {
+    position: 'absolute',
+    top: 100, // Positioned below the header
+    left: 16,
+    right: 16,
+    zIndex: 20,
+  },
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    height: 44,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  searchInput: {
+    flex: 1,
+    marginLeft: 8,
+    fontSize: 14,
+    color: COLORS.textDark,
+  },
+  
+  // Center Pin
   centerPinContainer: {
     position: 'absolute',
     top: '50%',
     left: '50%',
-    transform: [{ translateX: -50 }, { translateY: -80 }], // Adjust to center visually
+    transform: [{ translateX: -50 }, { translateY: -40 }], // Adjusted for map center
     alignItems: 'center',
     zIndex: 5,
     pointerEvents: 'none',
@@ -480,10 +526,10 @@ const styles = StyleSheet.create({
     color: COLORS.textDark,
   },
 
-  // --- Bottom Sheet ---
+  // --- Bottom Sheet (Unchanged mostly) ---
   bottomSheetContainer: {
     flex: 1,
-    marginTop: -24, // Pull up over the map
+    marginTop: -24, 
     backgroundColor: COLORS.backgroundLight,
     borderTopLeftRadius: 32,
     borderTopRightRadius: 32,
@@ -519,11 +565,9 @@ const styles = StyleSheet.create({
   },
   sheetSubtitle: {
     fontSize: 14,
-    color: COLORS.primary, // Using Green as requested
+    color: COLORS.primary,
     marginTop: 4,
   },
-
-  // --- Form Elements ---
   emergencyBox: {
     backgroundColor: COLORS.emergencyBg,
     borderRadius: 16,
@@ -573,7 +617,6 @@ const styles = StyleSheet.create({
   switchTextActive: {
     color: COLORS.textDark,
   },
-
   inputGroup: {
     marginBottom: 16,
   },
@@ -602,8 +645,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 12,
   },
-  
-  // Gender Cards
   genderCard: {
     flex: 1,
     backgroundColor: COLORS.surface,
@@ -614,17 +655,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'transparent',
   },
-  genderCardSelected: {
-    // Styles handled inline for specific colors
-  },
+  genderCardSelected: {},
   genderText: {
     fontSize: 10,
     fontWeight: '700',
     color: COLORS.textGray,
     marginTop: 4,
   },
-
-  // Condition Chips
   chipContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -650,8 +687,6 @@ const styles = StyleSheet.create({
   chipTextSelected: {
     color: '#fff',
   },
-
-  // TextArea
   textArea: {
     height: 100,
     textAlignVertical: 'top',
@@ -662,14 +697,12 @@ const styles = StyleSheet.create({
     bottom: 12,
     right: 12,
   },
-
-  // Photos
   photoAddBtn: {
     width: 100,
     height: 100,
     borderRadius: 12,
     borderWidth: 2,
-    borderColor: 'rgba(55, 236, 19, 0.4)', // Primary opacity
+    borderColor: 'rgba(55, 236, 19, 0.4)',
     borderStyle: 'dashed',
     backgroundColor: 'rgba(55, 236, 19, 0.05)',
     justifyContent: 'center',
@@ -708,8 +741,6 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 2,
   },
-
-  // Bottom Floating Button
   bottomGradient: {
     position: 'absolute',
     bottom: 0,
@@ -726,7 +757,6 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     borderRadius: 30,
     gap: 8,
-    // Shadow glow
     shadowColor: COLORS.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.4,
