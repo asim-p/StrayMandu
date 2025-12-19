@@ -1,47 +1,54 @@
 import { Stack, useRouter, useSegments } from "expo-router";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { View, ActivityIndicator } from "react-native";
 import { AuthProvider, useAuth } from "../src/context/AuthContext";
+import { doc, getDoc } from "firebase/firestore";
+import { db } from "../src/config/firebase";
 
 function RootLayoutNav() {
   const { user, loading } = useAuth();
   const segments = useSegments();
   const router = useRouter();
+  const [isCheckingRole, setIsCheckingRole] = useState(false);
 
   useEffect(() => {
-    if (loading) return;
+    if (loading || isCheckingRole) return;
 
-    // 1. Get the current route name
-    // If segments is empty (root), we default to "index"
-    const currentRoute = segments[0] || "index";
+    const determineRoute = async () => {
+      const currentRoute = segments[0] || "index";
+      const guestOnlyRoutes = ["index", "login", "signup"];
+      const isGuestPage = guestOnlyRoutes.includes(currentRoute);
 
-    // 2. Define the "Guest Only" pages
-    // These are the ONLY pages a logged-in user is NOT allowed to see
-    const guestOnlyRoutes = ["index", "login", "signup"];
+      if (user && isGuestPage) {
+        setIsCheckingRole(true);
+        try {
+          // Check if user exists in the 'organizations' collection
+          const orgDoc = await getDoc(doc(db, "organizations", user.uid));
+          
+          if (orgDoc.exists()) {
+            router.replace("/OrgHome");
+          } else {
+            // Default to volunteer home
+            router.replace("/home");
+          }
+        } catch (error) {
+          console.error("Error checking role:", error);
+          router.replace("/home"); // Fallback
+        } finally {
+          setIsCheckingRole(false);
+        }
+      } else if (!user && !isGuestPage) {
+        router.replace("/");
+      }
+    };
 
-    // 3. Check if the current page is a guest page
-    const isGuestPage = guestOnlyRoutes.includes(currentRoute);
-
-    if (user && isGuestPage) {
-      // SCENARIO: User is Logged In, but trying to view Login/Signup/Index.
-      // ACTION: Redirect them to the main app (Home).
-      router.replace("/home");
-      
-    } else if (!user && !isGuestPage) {
-      // SCENARIO: User is Logged Out, but trying to view Home/Map/Profile.
-      // ACTION: Kick them out to the start page.
-      router.replace("/");
-    }
-    
-    // SCENARIO: User is Logged In and goes to "/map".
-    // "map" is NOT in guestOnlyRoutes.
-    // The code does nothing, allowing the user to view the map.
-
+    determineRoute();
   }, [user, loading, segments]);
 
-  if (loading) {
+  // Show loading spinner if auth is loading OR if we are fetching the user role
+  if (loading || isCheckingRole) {
     return (
-      <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+      <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: '#F5F7F6' }}>
         <ActivityIndicator size="large" color="#39E53D" />
       </View>
     );
@@ -49,11 +56,11 @@ function RootLayoutNav() {
 
   return (
     <Stack screenOptions={{ headerShown: false }}>
-      {/* List ALL your pages here so the router knows they exist */}
       <Stack.Screen name="index" />
       <Stack.Screen name="login" />
       <Stack.Screen name="signup" />
       <Stack.Screen name="home" />
+      <Stack.Screen name="OrgHome" /> 
       <Stack.Screen name="map" />
     </Stack>
   );
