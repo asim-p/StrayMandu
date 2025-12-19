@@ -240,7 +240,7 @@ export default function Profile() {
             icon="article" 
             title="My Reports" 
             subtitle="Check status of reported dogs" 
-            onPress={() => router.push('/report')}
+            onPress={() => router.push('/myReport')}
             isLast={true}
           />
         </View>
