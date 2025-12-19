@@ -11,12 +11,15 @@ import {
   Platform,
   ScrollView,
   useWindowDimensions,
+  ActivityIndicator,
+  Alert
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { authService } from '../src/services/authService'; 
-import { db } from '../src/config/firebase'; // Added Firebase DB import
-import { doc, setDoc } from 'firebase/firestore'; // Added Firestore methods
+import { db } from '../src/config/firebase'; 
+import { doc, setDoc } from 'firebase/firestore'; 
 import { MaterialIcons, AntDesign, Feather } from '@expo/vector-icons';
+import * as Location from 'expo-location'; // IMPORT LOCATION SERVICE
 import StyledAlert from '../src/components/Alert';
 
 // Theme colors
@@ -65,31 +68,64 @@ export default function Signup() {
   const { height } = useWindowDimensions();
   
   const [userType, setUserType] = useState<'volunteer' | 'organization'>('volunteer');
-  const [name, setName] = useState('');
+  
+  // Shared Fields
+  const [name, setName] = useState(''); // Acts as "Full Name" or "Org Name"
   const [email, setEmail] = useState('');
   const [phoneNumber, setPhoneNumber] = useState(''); 
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   
+  // Organization Specific Fields
+  const [volunteerCount, setVolunteerCount] = useState('');
+  const [orgLocation, setOrgLocation] = useState<{lat: number, lng: number} | null>(null);
+  const [isLocating, setIsLocating] = useState(false);
+
+  // UI States
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const [isConfirmPasswordVisible, setIsConfirmPasswordVisible] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  // Focus states for styling
+  // Focus states
   const [nameFocused, setNameFocused] = useState(false);
   const [emailFocused, setEmailFocused] = useState(false);
   const [phoneFocused, setPhoneFocused] = useState(false);
   const [passwordFocused, setPasswordFocused] = useState(false);
   const [confirmPasswordFocused, setConfirmPasswordFocused] = useState(false);
+  const [volCountFocused, setVolCountFocused] = useState(false);
 
   const [alertState, setAlertState] = useState<{
     visible: boolean; title: string; message: string; type: 'error' | 'success' | 'warning' | 'info';
   }>({ visible: false, title: '', message: '', type: 'info' });
 
+  // --- LOCATION HANDLER ---
+  const handleGetLocation = async () => {
+    setIsLocating(true);
+    try {
+      let { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        setAlertState({ visible: true, title: 'Permission Denied', message: 'Permission to access location was denied', type: 'error' });
+        setIsLocating(false);
+        return;
+      }
+
+      let location = await Location.getCurrentPositionAsync({});
+      setOrgLocation({
+        lat: location.coords.latitude,
+        lng: location.coords.longitude
+      });
+      setAlertState({ visible: true, title: 'Location Set', message: 'Address coordinates captured successfully.', type: 'success' });
+    } catch (error) {
+      setAlertState({ visible: true, title: 'Error', message: 'Could not fetch location.', type: 'error' });
+    } finally {
+      setIsLocating(false);
+    }
+  };
+
   const handleSignup = async (): Promise<void> => {
-    // Validation
+    // 1. Common Validation
     if (!name?.trim()) {
-      setAlertState({ visible: true, title: 'Name Required', message: 'Please enter your name.', type: 'warning' });
+      setAlertState({ visible: true, title: 'Name Required', message: `Please enter your ${userType === 'organization' ? 'organization' : 'full'} name.`, type: 'warning' });
       return;
     }
     if (!email?.trim() || !/\S+@\S+\.\S+/.test(email)) {
@@ -105,27 +141,66 @@ export default function Signup() {
       return;
     }
 
+    // 2. Organization Specific Validation
+    if (userType === 'organization') {
+      if (!phoneNumber?.trim()) {
+        setAlertState({ visible: true, title: 'Phone Required', message: 'Organizations must provide a phone number.', type: 'warning' });
+        return;
+      }
+      if (!volunteerCount?.trim()) {
+        setAlertState({ visible: true, title: 'Volunteer Count', message: 'Please enter the number of volunteers.', type: 'warning' });
+        return;
+      }
+      if (!orgLocation) {
+        setAlertState({ visible: true, title: 'Address Required', message: 'Please capture your organization location.', type: 'warning' });
+        return;
+      }
+    }
+
     try {
       setLoading(true);
       
-      // 1. Create User in Firebase Authentication
+      // 3. Create Auth User
       const user = await authService.register(email.trim(), password);
 
-      // 2. Store Additional User Profile in Firestore
-      // We use the 'user.uid' as the document ID to link Auth and Database
-      await setDoc(doc(db, "users", user.uid), {
-        uid: user.uid,
-        name: name.trim(),
-        email: email.trim().toLowerCase(),
-        phoneNumber: phoneNumber?.trim() || '',
-        userType: userType,
-        photoURL : "",
-        createdAt: new Date().toISOString(),
-      });
+      // 4. Store in FIRESTORE based on Type
+      if (userType === 'volunteer') {
+        // --- SAVE TO 'USERS' COLLECTION ---
+        await setDoc(doc(db, "users", user.uid), {
+          uid: user.uid,
+          name: name.trim(),
+          email: email.trim().toLowerCase(),
+          phoneNumber: phoneNumber?.trim() || '',
+          userType: 'volunteer',
+          photoURL: "",
+          createdAt: new Date().toISOString(),
+        });
+
+      } else {
+        // --- SAVE TO 'ORGANIZATIONS' COLLECTION ---
+        await setDoc(doc(db, "organizations", user.uid), {
+          uid: user.uid,
+          organizationName: name.trim(),
+          email: email.trim().toLowerCase(),
+          phoneNumber: phoneNumber?.trim(), // Required for Orgs
+          numberOfVolunteers: parseInt(volunteerCount) || 0,
+          address: {
+            latitude: orgLocation?.lat,
+            longitude: orgLocation?.lng,
+          },
+          // Initialize stats
+          monthlyRescues: 0,
+          totalRescues: 0,
+          
+          userType: 'organization',
+          photoURL: "",
+          createdAt: new Date().toISOString(),
+        });
+      }
 
       setAlertState({
         visible: true,
-        title: 'Success!',
+        title: 'Welcome!',
         message: 'Account created successfully!',
         type: 'success',
       });
@@ -136,21 +211,11 @@ export default function Signup() {
 
     } catch (err: any) {
       console.error('Signup error:', err);
-      
-      // Handle Firebase specific error messages
       let friendlyMessage = "Unable to create account. Please try again.";
       if (err.includes("email-already-in-use")) {
-        friendlyMessage = "This email is already registered. Try logging in.";
-      } else if (err.includes("network-request-failed")) {
-        friendlyMessage = "Network error. Please check your internet connection.";
+        friendlyMessage = "This email is already registered.";
       }
-
-      setAlertState({
-        visible: true,
-        title: 'Signup Failed',
-        message: friendlyMessage,
-        type: 'error',
-      });
+      setAlertState({ visible: true, title: 'Signup Failed', message: friendlyMessage, type: 'error' });
     } finally {
       setLoading(false);
     }
@@ -167,44 +232,109 @@ export default function Signup() {
               <View style={styles.logoCircle}><MaterialIcons name="pets" size={20} color={COLORS.primary} /></View>
               <Text style={styles.appName}>StrayMandu</Text>
             </Pressable>
-            <Pressable onPress={() => router.back()} style={styles.backButton}>
-              <MaterialIcons name="arrow-back" size={24} color="#374151" />
-            </Pressable>
           </View>
 
           <View style={styles.mainContainer}>
             <View style={styles.welcomeSection}>
-              <Text style={styles.title}>Join Our Rescuers</Text>
-              <Text style={styles.subtitle}>Create an account and start making a difference for street dogs in Nepal.</Text>
+              <Text style={styles.title}>
+                {userType === 'volunteer' ? 'Join as Volunteer' : 'Register Organization'}
+              </Text>
+              <Text style={styles.subtitle}>
+                {userType === 'volunteer' 
+                  ? 'Create an account and start making a difference.' 
+                  : 'Register your rescue group to coordinate efficiently.'}
+              </Text>
             </View>
 
             <View style={styles.formContainer}>
               <UserTypeSelector selectedType={userType} onSelect={setUserType} />
                 
+              {/* --- Name Input --- */}
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>{userType === 'volunteer' ? 'Full Name' : 'Organization Name'}</Text>
                 <View style={[styles.inputWrapper, nameFocused && styles.inputWrapperFocused]}>
                   <Feather name={userType === 'volunteer' ? "user" : "briefcase"} size={20} color={nameFocused ? COLORS.primary : COLORS.textLightGray} style={styles.inputIcon} />
-                  <TextInput style={styles.input} placeholder={userType === 'volunteer' ? "Your Name" : "Rescue Group Name"} value={name} onChangeText={setName} onFocus={() => setNameFocused(true)} onBlur={() => setNameFocused(false)} />
+                  <TextInput 
+                    style={styles.input} 
+                    placeholder={userType === 'volunteer' ? "Your Name" : "Rescue Group Name"} 
+                    value={name} 
+                    onChangeText={setName} 
+                    onFocus={() => setNameFocused(true)} 
+                    onBlur={() => setNameFocused(false)} 
+                  />
                 </View>
               </View>
 
+              {/* --- Email Input --- */}
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>Email Address</Text>
                 <View style={[styles.inputWrapper, emailFocused && styles.inputWrapperFocused]}>
                   <MaterialIcons name="alternate-email" size={20} color={emailFocused ? COLORS.primary : COLORS.textLightGray} style={styles.inputIcon} />
-                  <TextInput style={styles.input} placeholder="volunteer@straymandu.com" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" onFocus={() => setEmailFocused(true)} onBlur={() => setEmailFocused(false)} />
+                  <TextInput style={styles.input} placeholder="contact@email.com" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" onFocus={() => setEmailFocused(true)} onBlur={() => setEmailFocused(false)} />
                 </View>
               </View>
               
+              {/* --- Phone Input --- */}
               <View style={styles.inputGroup}>
-                <Text style={styles.label}>Phone Number (Optional)</Text>
+                <Text style={styles.label}>Phone Number {userType === 'volunteer' ? '(Optional)' : '(Required)'}</Text>
                 <View style={[styles.inputWrapper, phoneFocused && styles.inputWrapperFocused]}>
                   <Feather name="phone" size={20} color={phoneFocused ? COLORS.primary : COLORS.textLightGray} style={styles.inputIcon} />
-                  <TextInput style={styles.input} placeholder="e.g. 98xxxxxxxx" value={phoneNumber} onChangeText={setPhoneNumber} keyboardType="phone-pad" onFocus={() => setPhoneFocused(true)} onBlur={() => setPhoneFocused(false)} />
+                  <TextInput style={styles.input} placeholder="98xxxxxxxx" value={phoneNumber} onChangeText={setPhoneNumber} keyboardType="phone-pad" onFocus={() => setPhoneFocused(true)} onBlur={() => setPhoneFocused(false)} />
                 </View>
               </View>
 
+              {/* --- ORGANIZATION ONLY FIELDS --- */}
+              {userType === 'organization' && (
+                <>
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.label}>Number of Volunteers</Text>
+                    <View style={[styles.inputWrapper, volCountFocused && styles.inputWrapperFocused]}>
+                      <MaterialIcons name="groups" size={20} color={volCountFocused ? COLORS.primary : COLORS.textLightGray} style={styles.inputIcon} />
+                      <TextInput 
+                        style={styles.input} 
+                        placeholder="e.g. 15" 
+                        value={volunteerCount} 
+                        onChangeText={setVolunteerCount} 
+                        keyboardType="number-pad" 
+                        onFocus={() => setVolCountFocused(true)} 
+                        onBlur={() => setVolCountFocused(false)} 
+                      />
+                    </View>
+                  </View>
+
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.label}>Permanent Address</Text>
+                    <Pressable 
+                      style={[styles.locationBox, orgLocation && styles.locationBoxSelected]}
+                      onPress={handleGetLocation}
+                    >
+                      {isLocating ? (
+                        <ActivityIndicator color={COLORS.primary} />
+                      ) : orgLocation ? (
+                        <View style={styles.locationContent}>
+                          <MaterialIcons name="check-circle" size={24} color={COLORS.primary} />
+                          <View>
+                             <Text style={styles.locationTitle}>Location Set</Text>
+                             <Text style={styles.locationSub}>Lat: {orgLocation.lat.toFixed(4)}, Lng: {orgLocation.lng.toFixed(4)}</Text>
+                          </View>
+                        </View>
+                      ) : (
+                        <View style={styles.locationContent}>
+                          <View style={styles.mapPlaceholderIcon}>
+                             <MaterialIcons name="add-location-alt" size={24} color={COLORS.textGray} />
+                          </View>
+                          <View>
+                            <Text style={styles.locationTitle}>Tap to set location</Text>
+                            <Text style={styles.locationSub}>We use your current GPS location</Text>
+                          </View>
+                        </View>
+                      )}
+                    </Pressable>
+                  </View>
+                </>
+              )}
+
+              {/* --- Password Input --- */}
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>Password</Text>
                 <View style={[styles.inputWrapper, passwordFocused && styles.inputWrapperFocused]}>
@@ -237,23 +367,12 @@ export default function Signup() {
               </Pressable>
             </View>
 
-            <View style={styles.dividerContainer}>
-              <View style={styles.dividerLine} />
-              <Text style={styles.dividerText}>Or quickly sign up with</Text>
-              <View style={styles.dividerLine} />
+            <View style={styles.footer}>
+              <Text style={styles.footerText}>Already have an account? </Text>
+              <Pressable onPress={() => router.push('/login')}><Text style={styles.loginText}>Log in</Text></Pressable>
             </View>
 
-            <Pressable style={({ pressed }) => [styles.googleButton, pressed && styles.buttonPressed]}>
-              <AntDesign name="google" size={20} color="#DB4437" />
-              <Text style={styles.googleButtonText}>Sign Up with Google</Text>
-            </Pressable>
           </View>
-
-          <View style={styles.footer}>
-            <Text style={styles.footerText}>Already have an account? </Text>
-            <Pressable onPress={() => router.push('/login')}><Text style={styles.loginText}>Log in</Text></Pressable>
-          </View>
-
         </ScrollView>
       </KeyboardAvoidingView>
 
@@ -268,233 +387,66 @@ export default function Signup() {
   );
 }
 
-// --- Styles for the new User Type Selector ---
+// --- STYLES ---
+
 const typeStyles = StyleSheet.create({
-    selectorContainer: {
-        marginBottom: 16,
-        gap: 8,
-    },
-    optionsWrapper: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        gap: 12,
-    },
+    selectorContainer: { marginBottom: 16, gap: 8 },
+    optionsWrapper: { flexDirection: 'row', justifyContent: 'space-between', gap: 12 },
     option: {
-        flex: 1,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        paddingVertical: 16,
-        paddingHorizontal: 10,
-        borderRadius: 16,
-        borderWidth: 1.5,
-        borderColor: COLORS.radioBorder,
-        backgroundColor: COLORS.surfaceLight,
-        gap: 8,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.05,
-        shadowRadius: 2,
-        elevation: 1,
+        flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+        paddingVertical: 16, paddingHorizontal: 10, borderRadius: 16,
+        borderWidth: 1.5, borderColor: COLORS.radioBorder, backgroundColor: COLORS.surfaceLight,
+        gap: 8, elevation: 1,
     },
-    optionActive: {
-        borderColor: COLORS.primary,
-        backgroundColor: 'rgba(57, 229, 61, 0.1)',
-    },
-    optionText: {
-        fontSize: 15,
-        fontWeight: '600',
-        color: COLORS.textGray,
-    },
-    optionTextActive: {
-        color: COLORS.textDark,
-    }
+    optionActive: { borderColor: COLORS.primary, backgroundColor: 'rgba(57, 229, 61, 0.1)' },
+    optionText: { fontSize: 15, fontWeight: '600', color: COLORS.textGray },
+    optionTextActive: { color: COLORS.textDark }
 });
 
-// --- General Page Styles (Copied and retained for context) ---
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: COLORS.backgroundLight,
-  },
-  scrollContent: {
-    flexGrow: 1,
-    paddingHorizontal: 24,
-    paddingBottom: 24,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 16,
-    marginBottom: 24,
-  },
-  headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  logoCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(57, 229, 61, 0.1)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  appName: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: COLORS.textDark,
-    letterSpacing: -0.5,
-  },
-  backButton: {
-    padding: 8,
-    borderRadius: 20,
-    backgroundColor: 'transparent',
-  },
-  mainContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    maxWidth: 450,
-    alignSelf: 'center',
-    width: '100%',
-  },
-  welcomeSection: {
-    marginBottom: 32,
-    alignItems: 'center',
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: '800',
-    color: COLORS.textDark,
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 14,
-    color: COLORS.textGray,
-    textAlign: 'center',
-    lineHeight: 20,
-    maxWidth: '90%',
-  },
-  formContainer: {
-    gap: 20,
-  },
-  inputGroup: {
-    gap: 8,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#374151',
-    marginLeft: 4,
-  },
+  safeArea: { flex: 1, backgroundColor: COLORS.backgroundLight },
+  scrollContent: { flexGrow: 1, paddingHorizontal: 24, paddingBottom: 24 },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 16, marginBottom: 12 },
+  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  logoCircle: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(57, 229, 61, 0.1)', justifyContent: 'center', alignItems: 'center' },
+  appName: { fontSize: 20, fontWeight: '700', color: COLORS.textDark, letterSpacing: -0.5 },
+  mainContainer: { flex: 1, justifyContent: 'center', maxWidth: 450, alignSelf: 'center', width: '100%' },
+  welcomeSection: { marginBottom: 24, alignItems: 'center' },
+  title: { fontSize: 28, fontWeight: '800', color: COLORS.textDark, marginBottom: 8 },
+  subtitle: { fontSize: 14, color: COLORS.textGray, textAlign: 'center', lineHeight: 20, maxWidth: '90%' },
+  formContainer: { gap: 16 },
+  inputGroup: { gap: 6 },
+  label: { fontSize: 14, fontWeight: '600', color: '#374151', marginLeft: 4 },
   inputWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.surfaceLight,
-    borderRadius: 16,
-    height: 56,
-    paddingHorizontal: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    elevation: 2,
-    borderWidth: 1.5,
-    borderColor: 'transparent',
+    flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.surfaceLight,
+    borderRadius: 16, height: 56, paddingHorizontal: 16, elevation: 2,
+    borderWidth: 1.5, borderColor: 'transparent',
   },
-  inputWrapperFocused: {
-    borderColor: COLORS.primary,
-    backgroundColor: '#FFFFFF',
+  inputWrapperFocused: { borderColor: COLORS.primary, backgroundColor: '#FFFFFF' },
+  inputIcon: { marginRight: 12 },
+  input: { flex: 1, fontSize: 16, color: COLORS.textDark, height: '100%' },
+  eyeIcon: { padding: 4 },
+  
+  // New Location Box Styles
+  locationBox: {
+    height: 80, backgroundColor: '#F3F4F6', borderRadius: 16,
+    justifyContent: 'center', alignItems: 'center', borderStyle: 'dashed', borderWidth: 2, borderColor: '#D1D5DB'
   },
-  inputIcon: {
-    marginRight: 12,
+  locationBoxSelected: {
+    backgroundColor: '#ECFDF5', borderColor: COLORS.primary, borderStyle: 'solid'
   },
-  input: {
-    flex: 1,
-    fontSize: 16,
-    color: COLORS.textDark,
-    height: '100%',
-  },
-  eyeIcon: {
-    padding: 4,
-  },
+  locationContent: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  mapPlaceholderIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#E5E7EB', alignItems: 'center', justifyContent: 'center'},
+  locationTitle: { fontSize: 14, fontWeight: '700', color: COLORS.textDark },
+  locationSub: { fontSize: 12, color: COLORS.textGray },
+
   signupButton: {
-    flexDirection: 'row',
-    backgroundColor: COLORS.primary,
-    height: 56,
-    borderRadius: 28,
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: 8,
-    shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 6,
+    flexDirection: 'row', backgroundColor: COLORS.primary, height: 56, borderRadius: 28,
+    justifyContent: 'center', alignItems: 'center', gap: 8, marginTop: 16, elevation: 6,
   },
-  buttonPressed: {
-    opacity: 0.9,
-    transform: [{ scale: 0.98 }],
-  },
-  signupButtonText: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#121811',
-  },
-  dividerContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: 32,
-    gap: 16,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: '#E5E7EB',
-  },
-  dividerText: {
-    fontSize: 14,
-    color: COLORS.textLightGray,
-    fontWeight: '500',
-  },
-  googleButton: {
-    flexDirection: 'row',
-    backgroundColor: COLORS.surfaceLight,
-    height: 56,
-    borderRadius: 28,
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 12,
-    borderWidth: 1,
-    borderColor: COLORS.googleBorder,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  googleButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#374151',
-  },
-  footer: {
-    marginTop: 'auto',
-    flexDirection: 'row',
-    justifyContent: 'center',
-    paddingVertical: 24,
-  },
-  footerText: {
-    fontSize: 14,
-    color: COLORS.textGray,
-  },
-  loginText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: COLORS.primary,
-    textDecorationLine: 'underline',
-  },
+  buttonPressed: { opacity: 0.9, transform: [{ scale: 0.98 }] },
+  signupButtonText: { fontSize: 18, fontWeight: '700', color: '#121811' },
+  footer: { marginTop: 24, flexDirection: 'row', justifyContent: 'center', paddingBottom: 20 },
+  footerText: { fontSize: 14, color: COLORS.textGray },
+  loginText: { fontSize: 14, fontWeight: '700', color: COLORS.primary, textDecorationLine: 'underline' },
 });

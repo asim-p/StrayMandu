@@ -27,14 +27,15 @@ import { DogReportData } from '../src/services/reportService';
 
 const { width } = Dimensions.get('window');
 
+// --- FIXED INTERFACE TO MATCH FIREBASE ---
 interface UserProfile {
-  username: string;
-  profileImage?: string;
+  name: string;      // Changed from 'username' to 'name'
+  photoURL?: string; // Changed from 'profileImage' to 'photoURL'
   phoneNumber?: string;
 }
 
 const COLORS = {
-  primary: '#37ec13',
+  primary: '#39E53D',
   backgroundLight: '#f6f8f6',
   textMain: '#121811',
   textSub: '#5c6f57',
@@ -76,7 +77,9 @@ export default function ReportDetail() {
           if (reportData.reporterId) {
             const userRef = doc(db, 'users', reportData.reporterId);
             const userSnap = await getDoc(userRef);
+            
             if (userSnap.exists()) {
+              // The data from Firebase fits the UserProfile interface now
               setReporterUser(userSnap.data() as UserProfile);
             }
           }
@@ -236,11 +239,11 @@ export default function ReportDetail() {
             </View>
           </View>
 
-          {/* Reported By Card - DYNAMIC */}
+          {/* Reported By Card - UPDATED WITH CORRECT FIELDS */}
           <View style={styles.reporterCard}>
             <View style={styles.reporterInfo}>
-              {reporterUser?.profileImage ? (
-                <Image source={{ uri: reporterUser.profileImage }} style={styles.avatarCircle} />
+              {reporterUser?.photoURL ? (
+                <Image source={{ uri: reporterUser.photoURL }} style={styles.avatarCircle} />
               ) : (
                 <View style={[styles.avatarCircle, { backgroundColor: COLORS.textSub }]}>
                   <MaterialIcons name="person" size={24} color={COLORS.white} />
@@ -249,7 +252,7 @@ export default function ReportDetail() {
               <View>
                 <Text style={styles.reporterLabel}>REPORTED BY</Text>
                 <Text style={styles.reporterName}>
-                  {reporterUser?.username || `User_${report.reporterId.substring(0, 6)}`}
+                  {reporterUser?.name || `User_${report.reporterId.substring(0, 6)}`}
                 </Text>
               </View>
             </View>
@@ -262,20 +265,6 @@ export default function ReportDetail() {
           </View>
         </View>
       </ScrollView>
-      
-      {/* Footer */}
-      {/* <View style={styles.footerAction}>
-         <Pressable 
-          style={[styles.respondButton, report.status === 'resolved' && {backgroundColor: '#ccc'}]}
-          disabled={report.status === 'resolved'}
-          onPress={() => Alert.alert("Confirm", "Are you heading to help this dog?")}
-         >
-            <Text style={styles.respondButtonText}>
-              {report.status === 'resolved' ? "Case Resolved" : "I can help this dog"}
-            </Text>
-         </Pressable>
-      </View> */}
-
     </SafeAreaView>
   );
 }
@@ -297,6 +286,7 @@ const styles = StyleSheet.create({
   criticalBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.red, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20, gap: 6 },
   pulseDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: COLORS.white },
   criticalText: { color: COLORS.white, fontSize: 10, fontWeight: '900' },
+  titleRow: { justifyContent: 'space-between' },
   tagRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 16 },
   tag: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, backgroundColor: COLORS.white, borderWidth: 1, borderColor: COLORS.cardBorder, flexDirection: 'row', alignItems: 'center', gap: 4 },
   tagText: { fontSize: 13, fontWeight: '600', color: COLORS.textMain },
