@@ -18,9 +18,8 @@ export interface DogReportData {
   characteristics: string;
   condition: 'Neutral' | 'Healthy' | 'Injured' | 'Aggressive' | 'Unknown';
   description: string;
-  imageUrls: string[]; // Array of Cloudinary URLs
+  imageUrls: string[];
   
-  // UPDATED: Expanded status options
   status: 'pending' | 'ongoing' | 'resolved' | 'acknowledged';
   
   // NEW: Field for the rescuer, optional/null initially

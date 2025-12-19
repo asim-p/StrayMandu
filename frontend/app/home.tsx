@@ -9,17 +9,17 @@ import {
   StyleSheet,
   StatusBar,
   Image,
-  Dimensions
+  Dimensions,
+  ActivityIndicator
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import BottomNav from '../src/components/BottomNav'; 
 
-// --- UPDATED IMPORTS FOR FIRESTORE ---
-import { auth, db } from '../src/config/firebase'; // Make sure this path matches your project structure
-import { doc, getDoc } from 'firebase/firestore';
+// --- FIREBASE IMPORTS ---
+import { auth, db } from '../src/config/firebase'; 
+import { doc, getDoc, collection, query, orderBy, limit, getDocs } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
 
 const DEFAULT_IMAGE = require('../img/default.png'); 
@@ -31,6 +31,8 @@ const COLORS = {
   textSub: '#5c6f57',
   danger: '#EF4444',
   warning: '#F97316',
+  success: '#10B981',
+  neutral: '#6B7280',
   white: '#FFFFFF',
 };
 
@@ -40,9 +42,11 @@ export default function Home() {
   const router = useRouter();
   const [userName, setUserName] = useState<string | null>(null);
   const [currentAddress, setCurrentAddress] = useState('Locating...');
-  
-  // --- NEW STATE FOR PROFILE PHOTO ---
   const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
+  
+  // --- NEW STATE FOR REPORTS ---
+  const [latestReports, setLatestReports] = useState<any[]>([]);
+  const [loadingReports, setLoadingReports] = useState(true);
 
   const getGreeting = () => {
     const hour = new Date().getHours();
@@ -52,36 +56,43 @@ export default function Home() {
     return 'Good Night';
   };
 
+  // Helper to get badge color based on condition
+  const getConditionColor = (condition: string) => {
+    switch (condition) {
+      case 'Injured':
+      case 'Aggressive':
+        return COLORS.danger;
+      case 'Healthy':
+        return COLORS.success;
+      case 'Neutral':
+      case 'Unknown':
+      default:
+        return COLORS.warning;
+    }
+  };
+
   useEffect(() => {
     let mounted = true;
 
-    // --- 1. FETCH USER & PHOTO FROM FIRESTORE ---
+    // 1. FETCH USER & PHOTO
     const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
       if (user && mounted) {
-        // Set basic name from Auth
         setUserName(user.displayName || user.email?.split('@')[0] || 'Hero');
-
         try {
-          // Fetch the REAL photo from Firestore (where Profile.tsx saved it)
           const userDoc = await getDoc(doc(db, "users", user.uid));
           if (userDoc.exists()) {
             const data = userDoc.data();
-            if (data.photoURL) {
-              setProfilePhoto(data.photoURL);
-            } else {
-              // Fallback to Auth photo if Firestore is empty
-              setProfilePhoto(user.photoURL);
-            }
-            // Update name from firestore if available
+            if (data.photoURL) setProfilePhoto(data.photoURL);
+            else setProfilePhoto(user.photoURL);
             if (data.name) setUserName(data.name);
           }
         } catch (error) {
-          console.log("Error fetching user data in Home:", error);
+          console.log("Error fetching user data:", error);
         }
       }
     });
 
-    // --- 2. LOCATION LOGIC ---
+    // 2. LOCATION LOGIC
     (async () => {
       try {
         let { status } = await Location.requestForegroundPermissionsAsync();
@@ -89,13 +100,11 @@ export default function Home() {
           if (mounted) setCurrentAddress('Permission Denied');
           return;
         }
-
         let location = await Location.getCurrentPositionAsync({});
         let address = await Location.reverseGeocodeAsync({
           latitude: location.coords.latitude,
           longitude: location.coords.longitude
         });
-
         if (mounted && address.length > 0) {
           const area = address[0].district || address[0].street || address[0].city;
           const city = address[0].city || address[0].region;
@@ -105,6 +114,30 @@ export default function Home() {
         if (mounted) setCurrentAddress('Kathmandu, Nepal');
       }
     })();
+
+    // 3. FETCH LATEST REPORTS FROM FIRESTORE
+    const fetchReports = async () => {
+      try {
+        // Query: Collection 'reports', order by 'createdAt' desc, limit 5
+        const q = query(collection(db, "reports"), orderBy("createdAt", "desc"), limit(5));
+        const querySnapshot = await getDocs(q);
+        
+        const reportsData = querySnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        
+        if (mounted) {
+          setLatestReports(reportsData);
+          setLoadingReports(false);
+        }
+      } catch (error) {
+        console.error("Error fetching reports:", error);
+        if (mounted) setLoadingReports(false);
+      }
+    };
+
+    fetchReports();
 
     return () => { 
       mounted = false; 
@@ -119,13 +152,11 @@ export default function Home() {
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
-          {/* CLICKABLE AVATAR SECTION */}
           <Pressable 
             style={styles.avatarContainer} 
             onPress={() => router.push('/profile')} 
           >
             <Image
-              // UPDATED LOGIC: Uses state fetched from Firestore, falls back to Default
               source={profilePhoto ? { uri: profilePhoto } : DEFAULT_IMAGE}
               style={styles.avatar}
             />
@@ -154,7 +185,7 @@ export default function Home() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Hero Section */}
+        {/* Hero Section (Unchanged) */}
         <View style={styles.sectionContainer}>
           <Pressable 
             style={({pressed}) => [styles.heroCard, pressed && { transform: [{scale: 0.98}] }]}
@@ -182,7 +213,7 @@ export default function Home() {
           </Pressable>
         </View>
 
-        {/* Nearby Reports */}
+        {/* Nearby Reports (Unchanged Images) */}
         <View style={[styles.sectionContainer, { marginTop: 24 }]}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Nearby Reports</Text>
@@ -214,54 +245,75 @@ export default function Home() {
                   </View>
                 </View>
                 <View style={styles.activeBadge}>
-                  <Text style={styles.activeBadgeText}>3 Active</Text>
+                  <Text style={styles.activeBadgeText}>{latestReports.length} Active</Text>
                 </View>
               </View>
             </ImageBackground>
           </View>
         </View>
 
-        {/* Latest Reports */}
+        {/* Latest Reports (DYNAMIC FROM DB) */}
         <View style={[styles.sectionContainer, { marginTop: 24 }]}>
           <Text style={[styles.sectionTitle, { marginBottom: 12 }]}>Latest Reports</Text>
-          <ScrollView 
-            horizontal 
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ paddingRight: 16 }}
-            snapToInterval={256} 
-            decelerationRate="fast"
-          >
-            <View style={styles.listCard}>
-              <ImageBackground
-                source={{ uri: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBxRrAnJIsX4tTfrUcmxU2SE83waosz5-br8RCf62lCSnPj-M5EFgHOTqJ5l3P4StqBaJiMq9DLxD1x97L85DDQn6Q-UoJCanCWV_cZxz6IC_1WQ0jxOJewBaK46daFbF5V0DtrnxUvhZpbbPjlX2D40OLRc_gcpn2ar_TEruP8zXGGvwWslqxojBB7Tss9LWqZ6FaDABZ8VAQ2rNgPSXWWDlrUOGBdkbwfwsTgW0LeN_7ieyYGJL58QWr9iboOeOrim0x2b8IE7v4' }}
-                style={styles.listCardImage}
-              >
-                <Text style={[styles.cardBadge, { backgroundColor: COLORS.danger }]}>Foster Needed</Text>
-              </ImageBackground>
-              <View style={styles.listCardContent}>
-                <Text style={styles.listCardTitle}>3 Puppies, Patan</Text>
-                <Text numberOfLines={2} style={styles.listCardDesc}>Found abandoned near Durbar Square. Urgent foster care required for 2 weeks.</Text>
-                <Pressable style={styles.actionButtonOutline}>
-                  <Text style={styles.actionButtonText}>I Can Foster</Text>
+          
+          {loadingReports ? (
+             <ActivityIndicator size="small" color={COLORS.primary} />
+          ) : latestReports.length === 0 ? (
+             <Text style={{color: COLORS.textSub}}>No reports found.</Text>
+          ) : (
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ paddingRight: 16 }}
+              snapToInterval={256} 
+              decelerationRate="fast"
+            >
+              {latestReports.map((report) => (
+                <Pressable 
+                  key={report.id}
+                  style={styles.listCard}
+                  // Redirect to detail page with the ID
+                  onPress={() => router.push({ pathname: '/detailReports', params: { id: report.id } })}
+                >
+                  <ImageBackground
+                    // Use first image from DB or fallback
+                    source={
+                      report.imageUrls && report.imageUrls.length > 0 
+                      ? { uri: report.imageUrls[0] } 
+                      : DEFAULT_IMAGE
+                    }
+                    style={styles.listCardImage}
+                  >
+                    {/* Dynamic Badge based on Condition */}
+                    <Text style={[
+                      styles.cardBadge, 
+                      { backgroundColor: getConditionColor(report.condition) }
+                    ]}>
+                      {report.condition || 'Unknown'}
+                    </Text>
+                  </ImageBackground>
+                  
+                  <View style={styles.listCardContent}>
+                    {/* Name or Breed */}
+                    <Text style={styles.listCardTitle} numberOfLines={1}>
+                      {report.name ? report.name : report.breed}
+                    </Text>
+                    
+                    {/* Description */}
+                    <Text numberOfLines={2} style={styles.listCardDesc}>
+                      {report.description || "No description provided."}
+                    </Text>
+                    
+                    {/* Tap to View Details (Visual Cue) */}
+                    <View style={styles.tapToView}>
+                       <Text style={styles.tapToViewText}>Tap to view details</Text>
+                       <MaterialIcons name="arrow-forward" size={12} color={COLORS.primary} />
+                    </View>
+                  </View>
                 </Pressable>
-              </View>
-            </View>
-            <View style={styles.listCard}>
-              <ImageBackground
-                source={{ uri: 'https://lh3.googleusercontent.com/aida-public/AB6AXuCanuTCLCsq3vyBw2yewkElCdrM0rpT-eGPQkRnrGjatEgx_DC2mm8K32i7PwhH9-ySlaY-5goYKKmnn4gOjdJX2SFmZhrkCayjZE82XfldPdReKPi5De455lJDaMg9bF0GF2yJunLSbbqOFr8KOpWFRKHxwE-b4qYdDoagMqz8bM3XusxZY1gfJgOHETtoijvfqTWZBquj6BhH1GNXSvV6nGXlDJ6mRLMrudaC8BSspB9opeTYm11bNWHepjGRm-UmIXXwO7-4lD4' }}
-                style={styles.listCardImage}
-              >
-                <Text style={[styles.cardBadge, { backgroundColor: COLORS.warning }]}>Medical Fund</Text>
-              </ImageBackground>
-              <View style={styles.listCardContent}>
-                <Text style={styles.listCardTitle}>Kalu's Surgery</Text>
-                <Text numberOfLines={2} style={styles.listCardDesc}>Hit by a bike. Needs leg surgery immediately. We are raising NPR 15,000.</Text>
-                <Pressable style={styles.actionButtonOutline}>
-                  <Text style={styles.actionButtonText}>Donate Now</Text>
-                </Pressable>
-              </View>
-            </View>
-          </ScrollView>
+              ))}
+            </ScrollView>
+          )}
         </View>
       </ScrollView>
 
@@ -307,7 +359,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     borderWidth: 2,
     borderColor: COLORS.primary,
-    backgroundColor: '#e5e7eb', // Added background for when loading
+    backgroundColor: '#e5e7eb',
   },
   onlineBadge: {
     position: 'absolute',
@@ -516,6 +568,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: COLORS.primary,
   },
+  // --- UPDATED LIST CARD STYLES ---
   listCard: {
     width: 240,
     backgroundColor: '#FFF',
@@ -528,10 +581,12 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
     elevation: 2,
+    height: 230, // Fixed height to align
   },
   listCardImage: {
     height: 128,
     width: '100%',
+    backgroundColor: '#f0f0f0',
   },
   cardBadge: {
     position: 'absolute',
@@ -543,10 +598,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 12,
-    textTransform: 'uppercase',
+    textTransform: 'capitalize',
+    overflow: 'hidden',
   },
   listCardContent: {
     padding: 12,
+    flex: 1,
+    justifyContent: 'space-between'
   },
   listCardTitle: {
     fontSize: 16,
@@ -557,19 +615,19 @@ const styles = StyleSheet.create({
   listCardDesc: {
     fontSize: 12,
     color: '#6B7280',
-    marginBottom: 12,
+    marginBottom: 8,
     lineHeight: 16,
-    height: 32,
+    height: 32, // limit to 2 lines approximately
   },
-  actionButtonOutline: {
-    backgroundColor: 'rgba(55,236,19,0.1)',
-    paddingVertical: 8,
-    borderRadius: 8,
+  tapToView: {
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 4,
+    marginTop: 4,
   },
-  actionButtonText: {
-    fontSize: 12,
+  tapToViewText: {
+    fontSize: 10,
+    color: COLORS.primary,
     fontWeight: '700',
-    color: COLORS.textMain,
   },
 });
