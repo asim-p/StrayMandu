@@ -15,17 +15,14 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
-import BottomNav from '../src/components/BottomNav'; // Import the component
+import BottomNav from '../src/components/BottomNav'; 
 
-import { getAuth } from 'firebase/auth'; // or your firebase config file
+// --- UPDATED IMPORTS FOR FIRESTORE ---
+import { auth, db } from '../src/config/firebase'; // Make sure this path matches your project structure
+import { doc, getDoc } from 'firebase/firestore';
+import { onAuthStateChanged } from 'firebase/auth';
 
-// Inside your component:
-const auth = getAuth();
-const user = auth.currentUser;
-
-// Create a fallback image in case the user hasn't set a profile pic yet
-const placeholderImage = 'https://via.placeholder.com/150'; 
-const profilePic = user?.photoURL ? { uri: user.photoURL } : require('../img/Asim.png');
+const DEFAULT_IMAGE = require('../img/default.png'); 
 
 const COLORS = {
   primary: '#37ec13',
@@ -43,6 +40,9 @@ export default function Home() {
   const router = useRouter();
   const [userName, setUserName] = useState<string | null>(null);
   const [currentAddress, setCurrentAddress] = useState('Locating...');
+  
+  // --- NEW STATE FOR PROFILE PHOTO ---
+  const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
 
   const getGreeting = () => {
     const hour = new Date().getHours();
@@ -54,19 +54,34 @@ export default function Home() {
 
   useEffect(() => {
     let mounted = true;
-    (async () => {
-      try {
-        const raw = await AsyncStorage.getItem('user');
-        if (raw) {
-          const parsed = JSON.parse(raw);
-          const name = parsed?.name || parsed?.email || null;
-          if (mounted && name) setUserName(name);
-        }
-      } catch (err) {
-        console.warn('Failed to load user', err);
-      }
-    })();
 
+    // --- 1. FETCH USER & PHOTO FROM FIRESTORE ---
+    const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
+      if (user && mounted) {
+        // Set basic name from Auth
+        setUserName(user.displayName || user.email?.split('@')[0] || 'Hero');
+
+        try {
+          // Fetch the REAL photo from Firestore (where Profile.tsx saved it)
+          const userDoc = await getDoc(doc(db, "users", user.uid));
+          if (userDoc.exists()) {
+            const data = userDoc.data();
+            if (data.photoURL) {
+              setProfilePhoto(data.photoURL);
+            } else {
+              // Fallback to Auth photo if Firestore is empty
+              setProfilePhoto(user.photoURL);
+            }
+            // Update name from firestore if available
+            if (data.name) setUserName(data.name);
+          }
+        } catch (error) {
+          console.log("Error fetching user data in Home:", error);
+        }
+      }
+    });
+
+    // --- 2. LOCATION LOGIC ---
     (async () => {
       try {
         let { status } = await Location.requestForegroundPermissionsAsync();
@@ -91,45 +106,47 @@ export default function Home() {
       }
     })();
 
-    return () => { mounted = false; };
+    return () => { 
+      mounted = false; 
+      unsubscribeAuth();
+    };
   }, []);
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" backgroundColor={COLORS.backgroundLight} />
 
-{/* Header */}
-<View style={styles.header}>
-  <View style={styles.headerLeft}>
-    {/* CLICKABLE AVATAR SECTION */}
-    <Pressable 
-      style={styles.avatarContainer} 
-      onPress={() => router.push('/profile')} 
-    >
-      <Image
-        // source pulls from Firebase photoURL, falls back to local asset
-        source={user?.photoURL ? { uri: user.photoURL } : require('../img/Asim.png')}
-        style={styles.avatar}
-      />
-      <View style={styles.onlineBadge} />
-    </Pressable>
-    
-    <View>
-      <Text style={styles.greetingText}>{getGreeting()}</Text>
-      {/* Pulling the display name directly from Firebase */}
-      <Text style={styles.userName}>
-        Namaste, {user?.displayName || userName || 'Hero'} 👋
-      </Text>
-    </View>
-  </View>
-  
-  <Pressable 
-    style={styles.iconButton}
-    onPress={() => router.push('/notifications')}
-  >
-    <MaterialIcons name="notifications" size={24} color={COLORS.textMain} />
-  </Pressable>
-</View>
+      {/* Header */}
+      <View style={styles.header}>
+        <View style={styles.headerLeft}>
+          {/* CLICKABLE AVATAR SECTION */}
+          <Pressable 
+            style={styles.avatarContainer} 
+            onPress={() => router.push('/profile')} 
+          >
+            <Image
+              // UPDATED LOGIC: Uses state fetched from Firestore, falls back to Default
+              source={profilePhoto ? { uri: profilePhoto } : DEFAULT_IMAGE}
+              style={styles.avatar}
+            />
+            <View style={styles.onlineBadge} />
+          </Pressable>
+          
+          <View>
+            <Text style={styles.greetingText}>{getGreeting()}</Text>
+            <Text style={styles.userName}>
+              Namaste, {userName} 👋
+            </Text>
+          </View>
+        </View>
+        
+        <Pressable 
+          style={styles.iconButton}
+          onPress={() => router.push('/notifications')}
+        >
+          <MaterialIcons name="notifications" size={24} color={COLORS.textMain} />
+        </Pressable>
+      </View>
 
 
       <ScrollView 
@@ -290,6 +307,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     borderWidth: 2,
     borderColor: COLORS.primary,
+    backgroundColor: '#e5e7eb', // Added background for when loading
   },
   onlineBadge: {
     position: 'absolute',

@@ -10,7 +10,8 @@ import {
   StatusBar,
   TextInput, 
   Alert,     
-  Keyboard
+  Keyboard,
+  Image
 } from 'react-native';
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import * as Location from 'expo-location';
@@ -18,58 +19,90 @@ import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import BottomNav from '../src/components/BottomNav'; 
 
+// Firebase Imports
+import { collection, getDocs } from 'firebase/firestore';
+import { db } from '../src/config/firebase';
+import { DogReportData } from '../src/services/reportService';
+
 const { width, height } = Dimensions.get('window');
 
 const COLORS = {
   primary: '#37ec13',
+  alert: '#ef4444', // Red for emergencies
   background: '#f6f8f6',
   surface: '#ffffff',
   textMain: '#121811',
   textSub: '#5c6f57',
 };
 
-const DUMMY_REPORTS = [
-  { id: 1, title: 'Injured Dog', type: 'Medical', lat: 27.7172, long: 85.3240, desc: 'Leg injury, needs help.' },
-  { id: 2, title: 'Lost Puppy', type: 'Lost', lat: 27.7120, long: 85.3130, desc: 'Black puppy, red collar.' },
-  { id: 3, title: 'Aggressive Stray', type: 'Danger', lat: 27.7200, long: 85.3200, desc: 'Barking at pedestrians.' },
-];
+// Extend your Report Type to include the Firestore Document ID
+interface ReportWithId extends DogReportData {
+  id: string;
+}
 
 export default function MapScreen() {
   const router = useRouter();
   const mapRef = useRef<MapView>(null);
   
-  const [location, setLocation] = useState<Location.LocationObject | null>(null);
-  const [selectedReport, setSelectedReport] = useState<typeof DUMMY_REPORTS[0] | null>(null);
+  const [userLocation, setUserLocation] = useState<Location.LocationObject | null>(null);
+  const [reports, setReports] = useState<ReportWithId[]>([]); // Store real reports
+  const [selectedReport, setSelectedReport] = useState<ReportWithId | null>(null);
   const [tracksViewChanges, setTracksViewChanges] = useState(true);
+  const [loadingReports, setLoadingReports] = useState(true);
 
   // Search State
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
 
+  // 1. Fetch User Location & Reports on Mount
   useEffect(() => {
     (async () => {
+      // A. Get User Location
       let { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') return;
+      if (status === 'granted') {
+        let location = await Location.getCurrentPositionAsync({});
+        setUserLocation(location);
 
-      let userLocation = await Location.getCurrentPositionAsync({});
-      setLocation(userLocation);
-
-      if (mapRef.current && userLocation) {
-        mapRef.current.animateToRegion({
-          latitude: userLocation.coords.latitude,
-          longitude: userLocation.coords.longitude,
-          latitudeDelta: 0.01,
-          longitudeDelta: 0.01,
-        });
+        if (mapRef.current) {
+          mapRef.current.animateToRegion({
+            latitude: location.coords.latitude,
+            longitude: location.coords.longitude,
+            latitudeDelta: 0.01,
+            longitudeDelta: 0.01,
+          });
+        }
       }
+
+      // B. Fetch Reports from Firebase
+      fetchReports();
     })();
     
+    // Optimize marker rendering
     const timer = setTimeout(() => {
       setTracksViewChanges(false);
     }, 1000);
     
     return () => clearTimeout(timer);
   }, []);
+
+  const fetchReports = async () => {
+    try {
+      const querySnapshot = await getDocs(collection(db, 'reports'));
+      const fetchedReports: ReportWithId[] = [];
+      
+      querySnapshot.forEach((doc) => {
+        // Cast the data to your interface
+        fetchedReports.push({ id: doc.id, ...doc.data() } as ReportWithId);
+      });
+
+      setReports(fetchedReports);
+    } catch (error) {
+      console.error("Error fetching reports:", error);
+      Alert.alert("Error", "Could not load stray dog reports.");
+    } finally {
+      setLoadingReports(false);
+    }
+  };
 
   const handleSearch = async () => {
     if (!searchQuery.trim()) return;
@@ -82,7 +115,6 @@ export default function MapScreen() {
 
       if (geocodedLocation.length > 0) {
         const { latitude, longitude } = geocodedLocation[0];
-        
         mapRef.current?.animateToRegion({
           latitude,
           longitude,
@@ -100,7 +132,7 @@ export default function MapScreen() {
     }
   };
 
-  const handleMarkerPress = (report: typeof DUMMY_REPORTS[0]) => {
+  const handleMarkerPress = (report: ReportWithId) => {
     setSelectedReport(report);
   };
 
@@ -135,10 +167,10 @@ export default function MapScreen() {
       </View>
 
       {/* The Map */}
-      {!location ? (
+      {!userLocation && loadingReports ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={COLORS.primary} />
-          <Text style={{ marginTop: 10, color: COLORS.textSub }}>Locating you...</Text>
+          <Text style={{ marginTop: 10, color: COLORS.textSub }}>Loading Map & Reports...</Text>
         </View>
       ) : (
         <MapView
@@ -149,17 +181,22 @@ export default function MapScreen() {
           showsMyLocationButton={false}
           onPress={handleMapPress}
           initialRegion={{
-            latitude: location.coords.latitude,
-            longitude: location.coords.longitude,
+            // Default to Kathmandu if location fails, otherwise user loc
+            latitude: userLocation?.coords.latitude || 27.7172,
+            longitude: userLocation?.coords.longitude || 85.3240,
             latitudeDelta: 0.015,
             longitudeDelta: 0.015,
           }}
           customMapStyle={mapStyle}
         >
-          {DUMMY_REPORTS.map((report) => (
+          {/* Render Real Reports */}
+          {reports.map((report) => (
             <Marker
               key={report.id}
-              coordinate={{ latitude: report.lat, longitude: report.long }}
+              coordinate={{ 
+                latitude: report.location.latitude, 
+                longitude: report.location.longitude 
+              }}
               tracksViewChanges={tracksViewChanges}
               onPress={(e) => {
                 e.stopPropagation();
@@ -167,10 +204,17 @@ export default function MapScreen() {
               }}
             >
               <View style={styles.markerContainer}>
-                <View style={styles.markerBubble}>
+                <View style={[
+                  styles.markerBubble,
+                  // If emergency, turn Red, otherwise Green
+                  report.emergency ? { backgroundColor: COLORS.alert, borderColor: '#fff' } : {}
+                ]}>
                   <MaterialIcons name="pets" size={20} color="#FFF" />
                 </View>
-                <View style={styles.markerArrow} />
+                <View style={[
+                  styles.markerArrow,
+                  report.emergency ? { borderTopColor: COLORS.alert } : {}
+                ]} />
               </View>
             </Marker>
           ))}
@@ -181,10 +225,10 @@ export default function MapScreen() {
       <Pressable 
         style={styles.recenterButton}
         onPress={() => {
-          if (location && mapRef.current) {
+          if (userLocation && mapRef.current) {
             mapRef.current.animateToRegion({
-              latitude: location.coords.latitude,
-              longitude: location.coords.longitude,
+              latitude: userLocation.coords.latitude,
+              longitude: userLocation.coords.longitude,
               latitudeDelta: 0.01,
               longitudeDelta: 0.01,
             });
@@ -195,22 +239,50 @@ export default function MapScreen() {
         <MaterialIcons name="my-location" size={24} color={COLORS.primary} />
       </Pressable>
 
-      {/* Bottom Info Card */}
+      {/* Bottom Info Card - Updated for Real Data */}
       {selectedReport && (
         <View style={styles.bottomCard}>
           <View style={styles.cardHeader}>
-            <View>
-              <Text style={styles.cardTitle}>{selectedReport.title}</Text>
-              <Text style={styles.cardSubtitle}>{selectedReport.type} Report</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.cardTitle}>
+                {selectedReport.name ? selectedReport.name : selectedReport.breed}
+              </Text>
+              <View style={styles.badgeRow}>
+                 {/* Emergency Badge */}
+                 {selectedReport.emergency && (
+                    <View style={styles.emergencyBadge}>
+                      <Text style={styles.emergencyText}>EMERGENCY</Text>
+                    </View>
+                 )}
+                 <Text style={styles.cardSubtitle}>
+                    {selectedReport.condition} • {selectedReport.gender}
+                 </Text>
+              </View>
             </View>
-            <View style={styles.cardIcon}>
-              <MaterialIcons name="medical-services" size={20} color={COLORS.primary} />
-            </View>
+            
+            {/* Display Image Preview if available */}
+            {selectedReport.imageUrls && selectedReport.imageUrls.length > 0 ? (
+              <Image 
+                source={{ uri: selectedReport.imageUrls[0] }} 
+                style={styles.cardImage} 
+              />
+            ) : (
+              <View style={styles.cardIcon}>
+                <MaterialIcons name="pets" size={20} color={COLORS.primary} />
+              </View>
+            )}
           </View>
-          <Text style={styles.cardDesc}>{selectedReport.desc}</Text>
-          <Pressable style={styles.cardButton}>
+
+          <Text style={styles.cardDesc} numberOfLines={2}>
+            {selectedReport.description || "No additional details provided."}
+          </Text>
+          
+          <Pressable style={[
+            styles.cardButton,
+            selectedReport.emergency ? { backgroundColor: COLORS.alert } : {}
+          ]}>
             <Text style={styles.cardButtonText}>View Details</Text>
-            <MaterialIcons name="arrow-forward" size={16} color="#121811" />
+            <MaterialIcons name="arrow-forward" size={16} color="#fff" />
           </Pressable>
         </View>
       )}
@@ -274,6 +346,8 @@ const styles = StyleSheet.create({
         color: COLORS.textMain,
         fontSize: 14,
     },
+    
+    // Marker Styles
     markerContainer: {
         alignItems: 'center',
         justifyContent: 'center',
@@ -308,6 +382,7 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.1,
         elevation: 2,
     },
+
     recenterButton: {
         position: 'absolute',
         right: 16,
@@ -323,6 +398,8 @@ const styles = StyleSheet.create({
         elevation: 5,
         zIndex: 20,
     },
+
+    // Card Styles
     bottomCard: {
         position: 'absolute',
         bottom: 110,
@@ -347,23 +424,49 @@ const styles = StyleSheet.create({
         fontWeight: '700',
         color: COLORS.textMain,
     },
+    badgeRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        marginTop: 2,
+    },
+    emergencyBadge: {
+        backgroundColor: '#FEF2F2',
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 4,
+        borderWidth: 1,
+        borderColor: '#FCA5A5',
+    },
+    emergencyText: {
+        color: '#B91C1C',
+        fontSize: 10,
+        fontWeight: '700',
+    },
     cardSubtitle: {
         fontSize: 12,
         color: COLORS.textSub,
         fontWeight: '600',
     },
     cardIcon: {
-        width: 36,
-        height: 36,
-        borderRadius: 18,
+        width: 48,
+        height: 48,
+        borderRadius: 8,
         backgroundColor: 'rgba(55,236,19,0.1)',
         justifyContent: 'center',
         alignItems: 'center',
+    },
+    cardImage: {
+        width: 48,
+        height: 48,
+        borderRadius: 8,
+        backgroundColor: '#E5E7EB',
     },
     cardDesc: {
         fontSize: 14,
         color: '#6B7280',
         marginBottom: 16,
+        marginTop: 8,
     },
     cardButton: {
         backgroundColor: COLORS.primary,
@@ -376,7 +479,7 @@ const styles = StyleSheet.create({
     },
     cardButtonText: {
         fontWeight: '700',
-        color: '#121811',
+        color: '#fff', 
     },
 });
 

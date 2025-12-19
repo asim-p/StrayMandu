@@ -119,6 +119,7 @@ export default function Signup() {
         email: email.trim().toLowerCase(),
         phoneNumber: phoneNumber?.trim() || '',
         userType: userType,
+        photoURL : "",
         createdAt: new Date().toISOString(),
       });
 

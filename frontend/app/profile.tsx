@@ -11,13 +11,18 @@ import {
   Switch,
   Platform,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { auth, db } from '../src/config/firebase'; // Adjust this path based on your folder structure
+import { auth, db } from '../src/config/firebase'; 
 import { onAuthStateChanged } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
-import { authService } from '../src/services/authService'; // Adjust this path
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { authService } from '../src/services/authService';
+import * as ImagePicker from 'expo-image-picker'; 
+import { uploadToCloudinary } from '../src/services/cloudinaryService'; 
+
+const DEFAULT_IMAGE = require('../img/default.png'); 
 
 const COLORS = {
   primary: '#37ec13',
@@ -34,35 +39,38 @@ export default function Profile() {
   const router = useRouter();
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [loading, setLoading] = useState(true);
+  const [uploadingImage, setUploadingImage] = useState(false); 
   
-  // Real User State
   const [userData, setUserData] = useState({
+    uid: '',
     name: 'User',
     email: '',
-    photoURL: null,
-    location: 'Nepal', // Default
-    reportsCount: 0,   // Default
+    photoURL: '', 
+    location: 'Nepal',
+    reportsCount: 0,
   });
 
+  // 1. Fetch User Data
   useEffect(() => {
-    // Listen for Auth changes
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
-        // 1. Get basic info from Auth
         const basicInfo = {
+          uid: user.uid,
           name: user.displayName || user.email?.split('@')[0] || 'User',
           email: user.email || '',
-          photoURL: user.photoURL,
+          photoURL: user.photoURL || '',
           location: 'Kathmandu, Nepal',
           reportsCount: 0,
         };
 
-        // 2. Optional: Get extra data (Location/Reports) from Firestore
         try {
           const userDoc = await getDoc(doc(db, "users", user.uid));
           if (userDoc.exists()) {
             const data = userDoc.data();
+            basicInfo.name = data.name || basicInfo.name;
             basicInfo.location = data.location || basicInfo.location;
+            // Prioritize Firestore photoURL, fallback to Auth, fallback to empty string
+            basicInfo.photoURL = data.photoURL || basicInfo.photoURL || ''; 
             basicInfo.reportsCount = data.reportsCount || 0;
           }
         } catch (error) {
@@ -71,7 +79,6 @@ export default function Profile() {
 
         setUserData(basicInfo);
       } else {
-        // Redirect to login if not authenticated
         router.replace('/login');
       }
       setLoading(false);
@@ -79,6 +86,54 @@ export default function Profile() {
 
     return unsubscribe;
   }, []);
+
+  // 2. Handle Image Selection
+  const handleUpdateProfilePicture = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission Denied', 'We need access to your gallery to change your photo.');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.5,
+    });
+
+    if (!result.canceled) {
+      const localUri = result.assets[0].uri;
+      uploadAndSaveImage(localUri);
+    }
+  };
+
+  // 3. Upload to Cloudinary & Update Firestore
+  const uploadAndSaveImage = async (uri: string) => {
+    if (!userData.uid) return;
+    
+    setUploadingImage(true);
+    try {
+      // A. Upload
+      const cloudinaryUrl = await uploadToCloudinary(uri);
+      
+      // B. Save Link to Database
+      const userRef = doc(db, "users", userData.uid);
+      await updateDoc(userRef, {
+        photoURL: cloudinaryUrl
+      });
+
+      // C. Update UI Immediately
+      setUserData(prev => ({ ...prev, photoURL: cloudinaryUrl }));
+      
+      Alert.alert("Success", "Profile picture updated!");
+    } catch (error) {
+      console.error(error);
+      Alert.alert("Error", "Failed to upload image. Please check your connection.");
+    } finally {
+      setUploadingImage(false);
+    }
+  };
 
   const handleLogout = async () => {
     Alert.alert("Logout", "Are you sure you want to sign out?", [
@@ -114,12 +169,13 @@ export default function Profile() {
     </Pressable>
   );
 
-  if (loading) return <View style={styles.loadingArea}><Text>Loading profile...</Text></View>;
+  if (loading) return <View style={styles.loadingArea}><ActivityIndicator size="large" color={COLORS.primary} /></View>;
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" />
 
+      {/* Header */}
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} style={styles.iconButton}>
           <MaterialIcons name="arrow-back" size={24} color={COLORS.textMain} />
@@ -133,14 +189,27 @@ export default function Profile() {
         {/* User Info Section */}
         <View style={styles.profileHero}>
           <View style={styles.avatarContainer}>
-            <Image 
-              source={userData.photoURL ? { uri: userData.photoURL } : require('../img/Asim.png')} 
-              style={styles.avatar} 
-            />
-            <Pressable style={styles.cameraBtn}>
+            {/* Logic: Show Spinner OR User Photo OR Default Photo */}
+            {uploadingImage ? (
+              <View style={[styles.avatar, styles.loadingAvatar]}>
+                <ActivityIndicator color={COLORS.primary} />
+              </View>
+            ) : (
+              <Image 
+                source={
+                  userData.photoURL && userData.photoURL !== "" 
+                    ? { uri: userData.photoURL } 
+                    : DEFAULT_IMAGE 
+                } 
+                style={styles.avatar} 
+              />
+            )}
+            
+            <Pressable style={styles.cameraBtn} onPress={handleUpdateProfilePicture}>
               <MaterialIcons name="photo-camera" size={18} color={COLORS.primary} />
             </Pressable>
           </View>
+          
           <Text style={styles.userName}>{userData.name}</Text>
           <View style={styles.locationRow}>
             <MaterialIcons name="location-on" size={16} color={COLORS.textSub} />
@@ -225,7 +294,8 @@ const styles = StyleSheet.create({
   scrollContent: { paddingBottom: 40 },
   profileHero: { alignItems: 'center', paddingVertical: 20 },
   avatarContainer: { position: 'relative', marginBottom: 16 },
-  avatar: { width: 120, height: 120, borderRadius: 60, borderWidth: 4, borderColor: COLORS.white },
+  avatar: { width: 120, height: 120, borderRadius: 60, borderWidth: 4, borderColor: COLORS.white, backgroundColor: '#e5e7eb' },
+  loadingAvatar: { justifyContent: 'center', alignItems: 'center', backgroundColor: '#e5e7eb' },
   cameraBtn: { position: 'absolute', bottom: 0, right: 0, backgroundColor: COLORS.white, padding: 8, borderRadius: 20, elevation: 4 },
   userName: { fontSize: 24, fontWeight: '800', color: COLORS.textMain },
   locationRow: { flexDirection: 'row', alignItems: 'center', marginTop: 4, gap: 4 },
