@@ -28,14 +28,13 @@ const { width, height } = Dimensions.get('window');
 
 const COLORS = {
   primary: '#37ec13',
-  alert: '#ef4444', // Red for emergencies
+  alert: '#ef4444', 
   background: '#f6f8f6',
   surface: '#ffffff',
   textMain: '#121811',
   textSub: '#5c6f57',
 };
 
-// Extend your Report Type to include the Firestore Document ID
 interface ReportWithId extends DogReportData {
   id: string;
 }
@@ -45,7 +44,7 @@ export default function MapScreen() {
   const mapRef = useRef<MapView>(null);
   
   const [userLocation, setUserLocation] = useState<Location.LocationObject | null>(null);
-  const [reports, setReports] = useState<ReportWithId[]>([]); // Store real reports
+  const [reports, setReports] = useState<ReportWithId[]>([]);
   const [selectedReport, setSelectedReport] = useState<ReportWithId | null>(null);
   const [tracksViewChanges, setTracksViewChanges] = useState(true);
   const [loadingReports, setLoadingReports] = useState(true);
@@ -54,10 +53,8 @@ export default function MapScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
 
-  // 1. Fetch User Location & Reports on Mount
   useEffect(() => {
     (async () => {
-      // A. Get User Location
       let { status } = await Location.requestForegroundPermissionsAsync();
       if (status === 'granted') {
         let location = await Location.getCurrentPositionAsync({});
@@ -72,12 +69,9 @@ export default function MapScreen() {
           });
         }
       }
-
-      // B. Fetch Reports from Firebase
       fetchReports();
     })();
     
-    // Optimize marker rendering
     const timer = setTimeout(() => {
       setTracksViewChanges(false);
     }, 1000);
@@ -91,7 +85,6 @@ export default function MapScreen() {
       const fetchedReports: ReportWithId[] = [];
       
       querySnapshot.forEach((doc) => {
-        // Cast the data to your interface
         fetchedReports.push({ id: doc.id, ...doc.data() } as ReportWithId);
       });
 
@@ -106,13 +99,11 @@ export default function MapScreen() {
 
   const handleSearch = async () => {
     if (!searchQuery.trim()) return;
-
     setIsSearching(true);
     Keyboard.dismiss();
 
     try {
       const geocodedLocation = await Location.geocodeAsync(searchQuery);
-
       if (geocodedLocation.length > 0) {
         const { latitude, longitude } = geocodedLocation[0];
         mapRef.current?.animateToRegion({
@@ -125,7 +116,6 @@ export default function MapScreen() {
         Alert.alert('Location not found', 'Please try a different search term.');
       }
     } catch (error) {
-      console.log(error);
       Alert.alert('Error', 'Something went wrong while searching.');
     } finally {
       setIsSearching(false);
@@ -145,7 +135,6 @@ export default function MapScreen() {
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
       
-      {/* Top Navigation Bar */}
       <View style={styles.topBar}>
         <Pressable onPress={() => router.back()} style={styles.backButton}>
           <MaterialIcons name="arrow-back" size={24} color={COLORS.textMain} />
@@ -166,7 +155,6 @@ export default function MapScreen() {
         </View>
       </View>
 
-      {/* The Map */}
       {!userLocation && loadingReports ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={COLORS.primary} />
@@ -181,7 +169,6 @@ export default function MapScreen() {
           showsMyLocationButton={false}
           onPress={handleMapPress}
           initialRegion={{
-            // Default to Kathmandu if location fails, otherwise user loc
             latitude: userLocation?.coords.latitude || 27.7172,
             longitude: userLocation?.coords.longitude || 85.3240,
             latitudeDelta: 0.015,
@@ -189,7 +176,6 @@ export default function MapScreen() {
           }}
           customMapStyle={mapStyle}
         >
-          {/* Render Real Reports */}
           {reports.map((report) => (
             <Marker
               key={report.id}
@@ -206,7 +192,6 @@ export default function MapScreen() {
               <View style={styles.markerContainer}>
                 <View style={[
                   styles.markerBubble,
-                  // If emergency, turn Red, otherwise Green
                   report.emergency ? { backgroundColor: COLORS.alert, borderColor: '#fff' } : {}
                 ]}>
                   <MaterialIcons name="pets" size={20} color="#FFF" />
@@ -221,7 +206,6 @@ export default function MapScreen() {
         </MapView>
       )}
 
-      {/* Recenter Button */}
       <Pressable 
         style={styles.recenterButton}
         onPress={() => {
@@ -239,7 +223,6 @@ export default function MapScreen() {
         <MaterialIcons name="my-location" size={24} color={COLORS.primary} />
       </Pressable>
 
-      {/* Bottom Info Card - Updated for Real Data */}
       {selectedReport && (
         <View style={styles.bottomCard}>
           <View style={styles.cardHeader}>
@@ -248,7 +231,6 @@ export default function MapScreen() {
                 {selectedReport.name ? selectedReport.name : selectedReport.breed}
               </Text>
               <View style={styles.badgeRow}>
-                 {/* Emergency Badge */}
                  {selectedReport.emergency && (
                     <View style={styles.emergencyBadge}>
                       <Text style={styles.emergencyText}>EMERGENCY</Text>
@@ -260,7 +242,6 @@ export default function MapScreen() {
               </View>
             </View>
             
-            {/* Display Image Preview if available */}
             {selectedReport.imageUrls && selectedReport.imageUrls.length > 0 ? (
               <Image 
                 source={{ uri: selectedReport.imageUrls[0] }} 
@@ -277,37 +258,33 @@ export default function MapScreen() {
             {selectedReport.description || "No additional details provided."}
           </Text>
           
-          <Pressable style={[
-            styles.cardButton,
-            selectedReport.emergency ? { backgroundColor: COLORS.alert } : {}
-          ]}>
+          <Pressable 
+            style={[
+              styles.cardButton,
+              selectedReport.emergency ? { backgroundColor: COLORS.alert } : {}
+            ]}
+            onPress={() => {
+              router.push({
+                pathname: '/detailReports',
+                params: { id: selectedReport.id }
+              });
+            }}
+          >
             <Text style={styles.cardButtonText}>View Details</Text>
             <MaterialIcons name="arrow-forward" size={16} color="#fff" />
           </Pressable>
         </View>
       )}
 
-      {/* REUSABLE COMPONENT */}
       <BottomNav activePage="map" />
-
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: COLORS.background,
-    },
-    map: {
-        width: width,
-        height: height,
-    },
-    loadingContainer: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
+    container: { flex: 1, backgroundColor: COLORS.background },
+    map: { width: width, height: height },
+    loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
     topBar: {
         position: 'absolute',
         top: Platform.OS === 'ios' ? 60 : 50,
@@ -324,9 +301,9 @@ const styles = StyleSheet.create({
         backgroundColor: COLORS.surface,
         justifyContent: 'center',
         alignItems: 'center',
+        elevation: 4,
         shadowColor: '#000',
         shadowOpacity: 0.1,
-        elevation: 4,
     },
     searchBar: {
         flex: 1,
@@ -336,23 +313,12 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         paddingHorizontal: 16,
+        elevation: 4,
         shadowColor: '#000',
         shadowOpacity: 0.1,
-        elevation: 4,
     },
-    searchInput: {
-        flex: 1,
-        height: '100%',
-        color: COLORS.textMain,
-        fontSize: 14,
-    },
-    
-    // Marker Styles
-    markerContainer: {
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: 4,
-    },
+    searchInput: { flex: 1, height: '100%', color: COLORS.textMain, fontSize: 14 },
+    markerContainer: { alignItems: 'center', justifyContent: 'center', padding: 4 },
     markerBubble: {
         width: 40,
         height: 40,
@@ -362,11 +328,10 @@ const styles = StyleSheet.create({
         borderColor: '#FFF',
         justifyContent: 'center',
         alignItems: 'center',
+        elevation: 5,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.25,
-        shadowRadius: 3.84,
-        elevation: 5,
     },
     markerArrow: {
         width: 0,
@@ -378,11 +343,7 @@ const styles = StyleSheet.create({
         borderRightColor: 'transparent',
         borderTopColor: COLORS.primary,
         marginTop: -2,
-        shadowColor: '#000',
-        shadowOpacity: 0.1,
-        elevation: 2,
     },
-
     recenterButton: {
         position: 'absolute',
         right: 16,
@@ -393,13 +354,11 @@ const styles = StyleSheet.create({
         backgroundColor: COLORS.surface,
         justifyContent: 'center',
         alignItems: 'center',
+        elevation: 5,
         shadowColor: '#000',
         shadowOpacity: 0.15,
-        elevation: 5,
         zIndex: 20,
     },
-
-    // Card Styles
     bottomCard: {
         position: 'absolute',
         bottom: 110,
@@ -408,28 +367,15 @@ const styles = StyleSheet.create({
         backgroundColor: COLORS.surface,
         borderRadius: 20,
         padding: 20,
+        elevation: 10,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.1,
-        elevation: 10,
         zIndex: 20,
     },
-    cardHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        marginBottom: 8,
-    },
-    cardTitle: {
-        fontSize: 18,
-        fontWeight: '700',
-        color: COLORS.textMain,
-    },
-    badgeRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 6,
-        marginTop: 2,
-    },
+    cardHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
+    cardTitle: { fontSize: 18, fontWeight: '700', color: COLORS.textMain },
+    badgeRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 },
     emergencyBadge: {
         backgroundColor: '#FEF2F2',
         paddingHorizontal: 6,
@@ -438,16 +384,8 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: '#FCA5A5',
     },
-    emergencyText: {
-        color: '#B91C1C',
-        fontSize: 10,
-        fontWeight: '700',
-    },
-    cardSubtitle: {
-        fontSize: 12,
-        color: COLORS.textSub,
-        fontWeight: '600',
-    },
+    emergencyText: { color: '#B91C1C', fontSize: 10, fontWeight: '700' },
+    cardSubtitle: { fontSize: 12, color: COLORS.textSub, fontWeight: '600' },
     cardIcon: {
         width: 48,
         height: 48,
@@ -456,18 +394,8 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
     },
-    cardImage: {
-        width: 48,
-        height: 48,
-        borderRadius: 8,
-        backgroundColor: '#E5E7EB',
-    },
-    cardDesc: {
-        fontSize: 14,
-        color: '#6B7280',
-        marginBottom: 16,
-        marginTop: 8,
-    },
+    cardImage: { width: 48, height: 48, borderRadius: 8, backgroundColor: '#E5E7EB' },
+    cardDesc: { fontSize: 14, color: '#6B7280', marginBottom: 16, marginTop: 8 },
     cardButton: {
         backgroundColor: COLORS.primary,
         paddingVertical: 12,
@@ -477,10 +405,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         gap: 8,
     },
-    cardButtonText: {
-        fontWeight: '700',
-        color: '#fff', 
-    },
+    cardButtonText: { fontWeight: '700', color: '#fff' },
 });
 
 const mapStyle = [
