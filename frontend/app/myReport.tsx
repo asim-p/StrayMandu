@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   SafeAreaView,
   View,
@@ -11,11 +11,16 @@ import {
   StatusBar,
   ActivityIndicator,
   Dimensions,
+  RefreshControl,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+
+// Firebase Imports
 import { auth, db } from '../src/config/firebase';
 import { collection, query, where, getDocs, orderBy } from 'firebase/firestore';
+
+// Types
 import { DogReportData } from '../src/services/reportService';
 
 const { width } = Dimensions.get('window');
@@ -29,61 +34,85 @@ const COLORS = {
   border: '#dde6db',
   blueBadge: '#2563eb',
   orangeBadge: '#ea580c',
+  grayLight: '#9ca3af',
 };
 
 export default function MyReports() {
   const router = useRouter();
   const [reports, setReports] = useState<(DogReportData & { id: string })[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [filter, setFilter] = useState('All');
+
+  const fetchMyReports = async () => {
+    const user = auth.currentUser;
+    if (!user) {
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const reportsRef = collection(db, 'reports');
+      // NOTE: This query requires a Firestore Composite Index
+      const q = query(
+        reportsRef,
+        where('reporterId', '==', user.uid),
+        orderBy('createdAt', 'desc')
+      );
+
+      const querySnapshot = await getDocs(q);
+      const data = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as (DogReportData & { id: string })[];
+      
+      setReports(data);
+    } catch (error) {
+      console.error("Error fetching reports:", error);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
 
   useEffect(() => {
     fetchMyReports();
   }, []);
 
-  const fetchMyReports = async () => {
-    const user = auth.currentUser;
-    if (!user) return;
-    try {
-      setLoading(true);
-      const q = query(
-        collection(db, 'reports'),
-        where('reporterId', '==', user.uid),
-        orderBy('createdAt', 'desc')
-      );
-      const querySnapshot = await getDocs(q);
-      const data = querySnapshot.docs.map(doc => ({ 
-        id: doc.id, 
-        ...doc.data() 
-      })) as (DogReportData & { id: string })[];
-      setReports(data);
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    fetchMyReports();
+  }, []);
 
   const filteredReports = reports.filter(report => {
-    const matchesSearch = report.name?.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                          report.id.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesFilter = filter === 'All' || (filter === 'Active' && report.status !== 'resolved') || (filter === 'Completed' && report.status === 'resolved');
+    const matchesSearch = 
+      report.name?.toLowerCase().includes(searchQuery.toLowerCase()) || 
+      report.id.toLowerCase().includes(searchQuery.toLowerCase());
+    
+    const matchesFilter = 
+      filter === 'All' || 
+      (filter === 'Active' && report.status !== 'resolved') || 
+      (filter === 'Completed' && report.status === 'resolved');
+
     return matchesSearch && matchesFilter;
   });
 
   const getStatusStyle = (status: string) => {
-    switch(status) {
-      case 'resolved': return { bg: '#37ec1320', text: '#2d8a1d', label: 'Rescued', icon: 'check-circle' };
-      case 'pending': return { bg: '#fff7ed', text: COLORS.orangeBadge, label: 'Pending', icon: 'schedule' };
-      default: return { bg: '#eff6ff', text: COLORS.blueBadge, label: 'In Review', icon: 'visibility' };
+    switch (status) {
+      case 'resolved':
+        return { bg: '#37ec1320', text: '#2d8a1d', label: 'Rescued', icon: 'check-circle' };
+      case 'pending':
+        return { bg: '#fff7ed', text: COLORS.orangeBadge, label: 'Pending', icon: 'schedule' };
+      default:
+        return { bg: '#eff6ff', text: COLORS.blueBadge, label: 'In Review', icon: 'visibility' };
     }
   };
 
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" />
-      
+
       {/* Header */}
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} style={styles.headerIcon}>
@@ -95,31 +124,39 @@ export default function MyReports() {
         </Pressable>
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollPadding}>
+      <ScrollView 
+        showsVerticalScrollIndicator={false} 
+        contentContainerStyle={styles.scrollPadding}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[COLORS.primary]} />
+        }
+      >
         {/* Search Bar */}
         <View style={styles.searchSection}>
-          <MaterialIcons name="search" size={20} color="#9ca3af" style={styles.searchIcon} />
-          <TextInput 
+          <MaterialIcons name="search" size={20} color={COLORS.grayLight} style={styles.searchIcon} />
+          <TextInput
             style={styles.searchInput}
             placeholder="Search by name or ID..."
-            placeholderTextColor="#9ca3af"
+            placeholderTextColor={COLORS.grayLight}
             value={searchQuery}
             onChangeText={setSearchQuery}
           />
         </View>
 
         {/* Filter Chips */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroll}>
-          {['All', 'Active', 'Completed'].map((item) => (
-            <Pressable 
-              key={item} 
-              onPress={() => setFilter(item)}
-              style={[styles.chip, filter === item && styles.chipActive]}
-            >
-              <Text style={[styles.chipText, filter === item && styles.chipTextActive]}>{item}</Text>
-            </Pressable>
-          ))}
-        </ScrollView>
+        <View>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroll}>
+            {['All', 'Active', 'Completed'].map((item) => (
+              <Pressable
+                key={item}
+                onPress={() => setFilter(item)}
+                style={[styles.chip, filter === item && styles.chipActive]}
+              >
+                <Text style={[styles.chipText, filter === item && styles.chipTextActive]}>{item}</Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+        </View>
 
         {/* Report List */}
         {loading ? (
@@ -128,24 +165,32 @@ export default function MyReports() {
           <View style={styles.listContainer}>
             {filteredReports.map((report) => {
               const status = getStatusStyle(report.status);
+              
+              // Formatting Firebase Timestamp safely
+              const displayDate = (report as any).createdAt?.seconds 
+                ? new Date((report as any).createdAt.seconds * 1000).toLocaleDateString()
+                : 'Recently';
+
               return (
-                <Pressable 
-                  key={report.id} 
+                <Pressable
+                  key={report.id}
                   style={styles.reportCard}
                   onPress={() => router.push({ pathname: '/detailReports', params: { id: report.id } })}
                 >
                   <View style={styles.imageWrapper}>
                     {report.imageUrls?.[0] ? (
-                        <Image source={{ uri: report.imageUrls[0] }} style={styles.cardImg} />
+                      <Image source={{ uri: report.imageUrls[0] }} style={styles.cardImg} />
                     ) : (
-                        <View style={styles.placeholderImg}><MaterialIcons name="pets" size={32} color="#cbd5e1" /></View>
+                      <View style={styles.placeholderImg}>
+                        <MaterialIcons name="pets" size={32} color="#cbd5e1" />
+                      </View>
                     )}
                   </View>
 
                   <View style={styles.cardInfo}>
                     <View style={styles.cardHeader}>
-                      <View>
-                        <Text style={styles.dogName}>{report.name || 'Unknown'}</Text>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.dogName} numberOfLines={1}>{report.name || 'Unnamed Dog'}</Text>
                         <View style={styles.idBadge}>
                           <Text style={styles.idText}>ID: #{report.id.substring(0, 6).toUpperCase()}</Text>
                         </View>
@@ -158,22 +203,28 @@ export default function MyReports() {
 
                     <View style={styles.cardFooter}>
                       <View style={styles.infoRow}>
-                        <MaterialIcons name="calendar-today" size={14} color="#9ca3af" />
-                        <Text style={styles.infoText}>Reported: {new Date(report.createdAt).toLocaleDateString()}</Text>
+                        <MaterialIcons name="calendar-today" size={14} color={COLORS.grayLight} />
+                        <Text style={styles.infoText}>Reported: {displayDate}</Text>
                       </View>
                       <View style={styles.infoRow}>
-                        <MaterialIcons name="location-on" size={14} color="#9ca3af" />
-                        <Text style={styles.infoText} numberOfLines={1}>{report.location.address}</Text>
+                        <MaterialIcons name="location-on" size={14} color={COLORS.grayLight} />
+                        <Text style={styles.infoText} numberOfLines={1}>
+                          {report.location.address || 'Kathmandu, Nepal'}
+                        </Text>
                       </View>
                     </View>
                   </View>
                 </Pressable>
               );
             })}
+
             {filteredReports.length === 0 && (
+              <View style={styles.emptyContainer}>
                 <Text style={styles.noMoreText}>No reports found</Text>
+              </View>
             )}
-            <Text style={styles.noMoreText}>No more reports</Text>
+            
+            <Text style={styles.footerText}>No more reports</Text>
           </View>
         )}
       </ScrollView>
@@ -181,15 +232,17 @@ export default function MyReports() {
       {/* Navigation Bar */}
       <View style={styles.navBar}>
         <Pressable style={styles.navItem} onPress={() => router.push('/home')}>
-          <MaterialIcons name="home" size={28} color="#9ca3af" />
+          <MaterialIcons name="home" size={28} color={COLORS.grayLight} />
           <Text style={styles.navText}>Home</Text>
         </Pressable>
+        
         <Pressable style={styles.fabContainer} onPress={() => router.push('/report')}>
           <View style={styles.fab}>
             <MaterialIcons name="add" size={32} color="#132210" />
           </View>
         </Pressable>
-        <Pressable style={styles.navItem} onPress={() => router.push('/profile')}>
+
+        <Pressable style={styles.navItem}>
           <MaterialIcons name="person" size={28} color={COLORS.primary} />
           <Text style={[styles.navText, { color: COLORS.primary, fontWeight: '700' }]}>Profile</Text>
         </Pressable>
@@ -200,37 +253,104 @@ export default function MyReports() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.backgroundLight },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, backgroundColor: 'rgba(246, 248, 246, 0.95)' },
-  headerIcon: { width: 48, height: 48, borderRadius: 24, justifyContent: 'center', alignItems: 'center' },
+  header: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    justifyContent: 'space-between', 
+    padding: 16, 
+    backgroundColor: 'rgba(246, 248, 246, 0.95)',
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0'
+  },
+  headerIcon: { width: 44, height: 44, borderRadius: 22, justifyContent: 'center', alignItems: 'center' },
   headerTitle: { fontSize: 18, fontWeight: '800', color: COLORS.textMain, flex: 1, textAlign: 'center' },
-  scrollPadding: { paddingBottom: 100, paddingHorizontal: 16 },
-  searchSection: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.surfaceLight, borderRadius: 30, borderWidth: 1, borderColor: COLORS.border, paddingHorizontal: 16, marginTop: 8 },
+  scrollPadding: { paddingBottom: 120, paddingHorizontal: 16 },
+  searchSection: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    backgroundColor: COLORS.surfaceLight, 
+    borderRadius: 30, 
+    borderWidth: 1, 
+    borderColor: COLORS.border, 
+    paddingHorizontal: 16, 
+    marginTop: 12,
+    height: 52,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 5,
+  },
   searchIcon: { marginRight: 8 },
-  searchInput: { flex: 1, height: 48, fontSize: 16, color: COLORS.textMain },
+  searchInput: { flex: 1, fontSize: 16, color: COLORS.textMain },
   chipScroll: { flexDirection: 'row', marginTop: 16, marginBottom: 8 },
-  chip: { paddingHorizontal: 20, paddingVertical: 8, borderRadius: 25, backgroundColor: COLORS.surfaceLight, borderWidth: 1, borderColor: COLORS.border, marginRight: 8 },
+  chip: { 
+    paddingHorizontal: 22, 
+    paddingVertical: 10, 
+    borderRadius: 25, 
+    backgroundColor: COLORS.surfaceLight, 
+    borderWidth: 1, 
+    borderColor: COLORS.border, 
+    marginRight: 10 
+  },
   chipActive: { backgroundColor: COLORS.textMain, borderColor: COLORS.textMain },
   chipText: { fontSize: 14, fontWeight: '700', color: COLORS.textSub },
   chipTextActive: { color: COLORS.surfaceLight },
-  listContainer: { marginTop: 16, gap: 12 },
-  reportCard: { flexDirection: 'row', backgroundColor: COLORS.surfaceLight, borderRadius: 20, padding: 12, borderWidth: 1, borderColor: COLORS.border, elevation: 2, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 10 },
-  imageWrapper: { width: 96, height: 96, borderRadius: 16, backgroundColor: '#e2e8f0', overflow: 'hidden' },
+  listContainer: { marginTop: 16, gap: 14 },
+  reportCard: { 
+    flexDirection: 'row', 
+    backgroundColor: COLORS.surfaceLight, 
+    borderRadius: 20, 
+    padding: 12, 
+    borderWidth: 1, 
+    borderColor: COLORS.border, 
+    elevation: 3, 
+    shadowColor: '#000', 
+    shadowOpacity: 0.06, 
+    shadowRadius: 12 
+  },
+  imageWrapper: { width: 100, height: 100, borderRadius: 16, backgroundColor: '#f3f4f6', overflow: 'hidden' },
   cardImg: { width: '100%', height: '100%' },
   placeholderImg: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   cardInfo: { flex: 1, marginLeft: 16, justifyContent: 'space-between' },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
   dogName: { fontSize: 17, fontWeight: '800', color: COLORS.textMain },
   idBadge: { backgroundColor: '#f3f4f6', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6, marginTop: 4, alignSelf: 'flex-start' },
-  idText: { fontSize: 10, fontWeight: '600', color: COLORS.textSub },
-  statusBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
-  statusLabel: { fontSize: 10, fontWeight: '800', textTransform: 'uppercase' },
-  cardFooter: { gap: 4, marginTop: 8 },
+  idText: { fontSize: 10, fontWeight: '700', color: COLORS.textSub },
+  statusBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 },
+  statusLabel: { fontSize: 10, fontWeight: '900', textTransform: 'uppercase' },
+  cardFooter: { gap: 6, marginTop: 8 },
   infoRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  infoText: { fontSize: 12, color: '#6b7280', fontWeight: '500' },
-  noMoreText: { textAlign: 'center', color: '#9ca3af', fontSize: 13, marginTop: 20 },
-  navBar: { position: 'absolute', bottom: 0, width: '100%', height: 80, backgroundColor: COLORS.surfaceLight, borderTopWidth: 1, borderTopColor: '#f3f4f6', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around', paddingBottom: 15 },
+  infoText: { fontSize: 12, color: '#6b7280', fontWeight: '600' },
+  emptyContainer: { alignItems: 'center', padding: 40 },
+  noMoreText: { color: COLORS.grayLight, fontSize: 14, fontWeight: '600' },
+  footerText: { textAlign: 'center', color: COLORS.grayLight, fontSize: 12, marginTop: 24, fontWeight: '500' },
+  navBar: { 
+    position: 'absolute', 
+    bottom: 0, 
+    width: '100%', 
+    height: 85, 
+    backgroundColor: COLORS.surfaceLight, 
+    borderTopWidth: 1, 
+    borderTopColor: '#f0f0f0', 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    justifyContent: 'space-around', 
+    paddingBottom: 20 
+  },
   navItem: { alignItems: 'center', width: '30%' },
-  navText: { fontSize: 11, color: '#9ca3af', marginTop: 4, fontWeight: '500' },
-  fabContainer: { top: -25 },
-  fab: { width: 64, height: 64, borderRadius: 32, backgroundColor: COLORS.primary, justifyContent: 'center', alignItems: 'center', shadowColor: COLORS.primary, shadowOpacity: 0.4, shadowRadius: 12, shadowOffset: { width: 0, height: 4 } }
+  navText: { fontSize: 11, color: COLORS.grayLight, marginTop: 4, fontWeight: '600' },
+  fabContainer: { top: -28 },
+  fab: { 
+    width: 66, 
+    height: 66, 
+    borderRadius: 33, 
+    backgroundColor: COLORS.primary, 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    shadowColor: COLORS.primary, 
+    shadowOpacity: 0.5, 
+    shadowRadius: 15, 
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 8
+  }
 });
