@@ -183,36 +183,78 @@ export default function UserNotification() {
 }
 
 // --- HELPERS ---
+
+/**
+ * Maps the notification type string to a MaterialCommunityIcons name
+ * Matches the 'type' field in the Notification interface
+ */
 const getIconName = (type: string): any => {
   switch (type) {
-    case 'check_circle': return 'check-circle';
-    case 'chat_bubble': return 'message-text';
-    case 'pets': return 'paw';
-    case 'campaign': return 'bullhorn';
-    case 'warning': return 'alert-circle';
-    case 'assignment_turned_in': return 'clipboard-check';
-    default: return 'bell';
+    case 'pets': 
+      return 'paw';
+    case 'campaign': 
+      return 'bullhorn';
+    case 'chat_bubble': 
+      return 'message-text';
+    case 'check_circle': 
+      return 'check-circle';
+    case 'assignment_turned_in': 
+      return 'clipboard-check';
+    case 'warning': 
+      return 'alert-circle';
+    case 'assignment_ind': 
+      return 'account-details';
+    case 'bar_chart': 
+      return 'chart-bar';
+    default: 
+      return 'bell'; // Fallback icon
   }
 };
 
-const getIconColor = (type: string) => {
+/**
+ * Maps the notification type to a specific branding color
+ */
+const getIconColor = (type: string): string => {
   switch (type) {
-    case 'check_circle': return '#059669';
-    case 'chat_bubble': return '#3b82f6';
-    case 'pets': return '#f97316';
-    case 'campaign': return '#3b82f6';
-    case 'warning': return '#ef4444';
-    default: return '#37ec13';
+    case 'check_circle': 
+      return '#059669'; // Emerald-600
+    case 'chat_bubble': 
+      return '#3b82f6'; // Blue-500
+    case 'pets': 
+      return '#f97316'; // Orange-500
+    case 'campaign': 
+      return '#8b5cf6'; // Violet-500
+    case 'warning': 
+      return '#ef4444'; // Red-500
+    case 'assignment_turned_in':
+    case 'assignment_ind':
+      return '#0ea5e9'; // Sky-500
+    default: 
+      return '#37ec13'; // StrayMandu Primary Green
   }
 };
 
-const formatTime = (seconds: number) => {
+/**
+ * Formats Firestore timestamps into human-readable relative time
+ * @param seconds - The seconds field from the Firestore Timestamp
+ */
+const formatTime = (seconds: number): string => {
   const now = Math.floor(Date.now() / 1000);
   const diff = now - seconds;
+
   if (diff < 60) return 'Just now';
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-  return `${Math.floor(diff / 86400)}d ago`;
+  
+  const minutes = Math.floor(diff / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}d ago`;
+  
+  // Fallback for older notifications
+  return new Date(seconds * 1000).toLocaleDateString();
 };
 
 const styles = StyleSheet.create({
