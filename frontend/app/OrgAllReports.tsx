@@ -1,0 +1,241 @@
+import React, { useEffect, useState } from 'react';
+import {
+  SafeAreaView, View, Text, ScrollView, ImageBackground,
+  Pressable, StyleSheet, StatusBar, Image, Modal, ActivityIndicator
+} from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import * as Location from 'expo-location';
+
+// --- FIREBASE ---
+import { db } from '../src/config/firebase'; 
+import { collection, query, where, getDocs, limit } from 'firebase/firestore';
+import BottomNav from '../src/components/BottomNav';
+
+const DESIGN = {
+  primary: '#37ec13',
+  bgLight: '#f6f8f6',
+  textMain: '#121811',
+  textSub: '#688961',
+  danger: '#EF4444',
+  dangerBg: '#FEE2E2',
+  warning: '#F59E0B',
+  warningBg: '#FEF3C7',
+};
+
+// --- HELPER: TIME AGO ---
+const getTimeAgo = (seconds: number) => {
+  if (!seconds) return '...';
+  const now = Math.floor(Date.now() / 1000);
+  const diff = now - seconds;
+
+  if (diff < 60) return 'Just now';
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  return `${Math.floor(diff / 86400)}d ago`;
+};
+
+export default function OrgHome() {
+  const router = useRouter();
+  const [loading, setLoading] = useState(true);
+  const [allReports, setAllReports] = useState<any[]>([]);
+  const [nearby, setNearby] = useState<any[]>([]);
+  const [recent, setRecent] = useState<any[]>([]);
+  
+  // --- FILTER STATES ---
+  const [sortBy, setSortBy] = useState('Date'); // Options: Date, Distance, Urgency
+  const [showFilterModal, setShowFilterModal] = useState(false);
+
+  useEffect(() => {
+    fetchReports();
+  }, []);
+
+  // Update sorted list whenever sortBy changes
+  useEffect(() => {
+    applySorting();
+  }, [sortBy, allReports]);
+
+  const fetchReports = async () => {
+    try {
+      let { status } = await Location.requestForegroundPermissionsAsync();
+      let userLoc = status === 'granted' ? await Location.getCurrentPositionAsync({}) : null;
+
+      const q = query(collection(db, "reports"), where("status", "==", "pending"), limit(30));
+      const snap = await getDocs(q);
+      const data = snap.docs.map(doc => {
+        const reportData = doc.data();
+        let dist = 0;
+        // Calculate distance if location exists
+        if (userLoc && reportData.location) {
+          dist = calculateDistance(
+            userLoc.coords.latitude, userLoc.coords.longitude,
+            reportData.location.latitude, reportData.location.longitude
+          );
+        }
+        return { id: doc.id, ...reportData, dist };
+      });
+
+      setAllReports(data);
+      
+      // Fixed "Nearest" logic (Always closest 5)
+      const nearestList = [...data].sort((a, b) => a.dist - b.dist).slice(0, 5);
+      setNearby(nearestList);
+      
+      setLoading(false);
+    } catch (e) { console.error(e); setLoading(false); }
+  };
+
+  const applySorting = () => {
+    let sorted = [...allReports];
+    if (sortBy === 'Date') {
+      sorted.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+    } else if (sortBy === 'Distance') {
+      sorted.sort((a, b) => a.dist - b.dist);
+    } else if (sortBy === 'Urgency') {
+      const order: any = { 'Critical': 0, 'Injured': 1, 'Pending': 2 };
+      sorted.sort((a, b) => (order[a.condition] ?? 3) - (order[b.condition] ?? 3));
+    }
+    setRecent(sorted);
+  };
+
+  const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+    const R = 6371;
+    const dLat = (lat2 - lat1) * (Math.PI / 180);
+    const dLon = (lon2 - lon1) * (Math.PI / 180);
+    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+              Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+  };
+
+  return (
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="dark-content" />
+      
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
+        {/* Nearest Section (Horizontal) */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Nearest to You</Text>
+            <View style={styles.radiusBadge}><Text style={styles.radiusText}>2km Radius</Text></View>
+          </View>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingLeft: 16 }}>
+            {nearby.map(item => (
+               <Pressable key={item.id} style={styles.nearCard} onPress={() => router.push({ pathname: '/detailReports', params: { id: item.id } })}>
+                 <ImageBackground source={{ uri: item.imageUrls?.[0] }} style={styles.nearImg} imageStyle={{ borderRadius: 16 }}>
+                   <View style={styles.nearOverlay}>
+                     <Text style={styles.nearDistText}>{item.dist.toFixed(1)} km</Text>
+                   </View>
+                 </ImageBackground>
+                 <Text style={styles.nearTitle} numberOfLines={1}>{item.breed || 'Rescue'}</Text>
+               </Pressable>
+            ))}
+          </ScrollView>
+        </View>
+
+        {/* Recently Reported List */}
+        <View style={styles.section}>
+          <View style={[styles.sectionHeader, { paddingHorizontal: 16 }]}>
+            <Text style={styles.sectionTitle}>Recent Reports</Text>
+            
+            {/* CLICKABLE SORT BUTTON */}
+            <Pressable 
+              style={styles.filterBtn} 
+              onPress={() => setShowFilterModal(true)}
+            >
+              <Text style={styles.sortText}>Sort by: {sortBy}</Text>
+              <MaterialIcons name="tune" size={14} color={DESIGN.textSub} />
+            </Pressable>
+          </View>
+
+          <View style={styles.listContainer}>
+            {recent.map(item => (
+              <Pressable key={item.id} style={styles.recentRow} onPress={() => router.push({ pathname: '/detailReports', params: { id: item.id } })}>
+                <Image source={{ uri: item.imageUrls?.[0] }} style={styles.rowImg} />
+                <View style={styles.rowContent}>
+                  <View style={styles.rowHeader}>
+                    <View style={styles.rowTitleArea}>
+                        <Text style={styles.rowId}>#{item.id.slice(-4)}</Text>
+                        <View style={[styles.rowBadge, { backgroundColor: item.condition === 'Critical' ? DESIGN.dangerBg : DESIGN.warningBg }]}>
+                            <Text style={[styles.rowBadgeText, { color: item.condition === 'Critical' ? DESIGN.danger : DESIGN.warning }]}>{item.condition}</Text>
+                        </View>
+                    </View>
+                    {/* DYNAMIC TIME AGO */}
+                    <Text style={styles.rowTime}>{getTimeAgo(item.createdAt?.seconds)}</Text>
+                  </View>
+                  <Text style={styles.rowTitle} numberOfLines={1}>{item.breed || 'Reported Dog'}</Text>
+                  <View style={styles.rowFooter}>
+                    <Text style={styles.rowLocText} numberOfLines={1}>{item.location?.address}</Text>
+                    <View style={styles.rowActionBtn}><MaterialIcons name="arrow-forward" size={14} color="black" /></View>
+                  </View>
+                </View>
+              </Pressable>
+            ))}
+          </View>
+        </View>
+      </ScrollView>
+
+      {/* FILTER MODAL */}
+      <Modal visible={showFilterModal} transparent animationType="fade">
+        <Pressable style={styles.modalOverlay} onPress={() => setShowFilterModal(false)}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Sort Reports By</Text>
+            {['Date', 'Distance', 'Urgency'].map((option) => (
+              <Pressable 
+                key={option} 
+                style={[styles.optionBtn, sortBy === option && styles.activeOption]}
+                onPress={() => { setSortBy(option); setShowFilterModal(false); }}
+              >
+                <Text style={[styles.optionText, sortBy === option && styles.activeOptionText]}>{option}</Text>
+                {sortBy === option && <MaterialIcons name="check" size={18} color={DESIGN.primary} />}
+              </Pressable>
+            ))}
+          </View>
+        </Pressable>
+      </Modal>
+
+      <BottomNav activePage="reports" />
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: DESIGN.bgLight },
+  section: { marginTop: 24 },
+  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  sectionTitle: { fontSize: 18, fontWeight: '800', color: DESIGN.textMain, paddingLeft: 16 },
+  radiusBadge: { backgroundColor: 'rgba(55, 236, 19, 0.1)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 20, marginRight: 16 },
+  radiusText: { color: DESIGN.primary, fontSize: 10, fontWeight: '700' },
+  
+  // Sort Button
+  filterBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#FFF', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: '#EEE' },
+  sortText: { fontSize: 12, color: DESIGN.textSub, fontWeight: '700' },
+
+  // List Items
+  listContainer: { paddingHorizontal: 16, gap: 12 },
+  recentRow: { flexDirection: 'row', backgroundColor: '#FFF', padding: 12, borderRadius: 20, elevation: 1 },
+  rowImg: { width: 75, height: 75, borderRadius: 12 },
+  rowContent: { flex: 1, marginLeft: 12 },
+  rowHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  rowTitleArea: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  rowId: { fontSize: 12, fontWeight: '800' },
+  rowBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8 },
+  rowBadgeText: { fontSize: 9, fontWeight: '800' },
+  rowTime: { fontSize: 10, color: DESIGN.textSub },
+  rowTitle: { fontSize: 15, fontWeight: '700', marginVertical: 4 },
+  rowFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  rowLocText: { fontSize: 11, color: DESIGN.textSub, flex: 1 },
+  rowActionBtn: { backgroundColor: DESIGN.primary, width: 28, height: 28, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
+
+  // Modal Styles
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center' },
+  modalContent: { width: '80%', backgroundColor: '#FFF', borderRadius: 20, padding: 20 },
+  modalTitle: { fontSize: 18, fontWeight: '800', marginBottom: 15, textAlign: 'center' },
+  optionBtn: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 15, borderBottomWidth: 1, borderBottomColor: '#F3F4F6' },
+  optionText: { fontSize: 16, fontWeight: '600', color: DESIGN.textMain },
+  activeOptionText: { color: DESIGN.primary },
+  nearCard: { width: 120, marginRight: 12 },
+  nearImg: { width: 120, height: 120 },
+  nearOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.2)', justifyContent: 'flex-end', padding: 8, borderRadius: 16 },
+  nearDistText: { color: '#FFF', fontWeight: '800', fontSize: 12 },
+  nearTitle: { marginTop: 4, fontSize: 13, fontWeight: '700' }
+});
