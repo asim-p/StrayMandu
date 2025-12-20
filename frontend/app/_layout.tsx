@@ -10,6 +10,7 @@ function RootLayoutNav() {
   const segments = useSegments();
   const router = useRouter();
   const [isCheckingRole, setIsCheckingRole] = useState(false);
+  
 
   useEffect(() => {
     if (loading || isCheckingRole) return;

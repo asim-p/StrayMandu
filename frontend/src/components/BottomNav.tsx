@@ -23,6 +23,7 @@ export default function BottomNav({ activePage }: BottomNavProps) {
     return activePage === page ? COLORS.primary : COLORS.inactive;
   };
 
+  
   const getLabelStyle = (page: string) => {
     return [
       styles.navLabel,

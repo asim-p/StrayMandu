@@ -5,6 +5,7 @@ import {
   signOut 
 } from "firebase/auth";
 
+
 export const authService = {
   // Sign Up
   register: async (email: string, pass: string) => {

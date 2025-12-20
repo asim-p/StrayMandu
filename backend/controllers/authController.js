@@ -13,6 +13,7 @@ exports.register = async (req, res) => {
     const hashed = await bcrypt.hash(password, 10);
     const user = await User.create({ email, password: hashed, name, phone, user_type });
 
+    
     // build safe user object (no password)
     const safeUser = {
       _id: user._id,

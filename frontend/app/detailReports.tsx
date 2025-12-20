@@ -238,6 +238,7 @@ export default function ReportDetail() {
               </View>
             </View>
           </View>
+          
 
           {/* Reported By Card - UPDATED WITH CORRECT FIELDS */}
           <View style={styles.reporterCard}>

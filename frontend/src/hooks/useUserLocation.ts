@@ -8,6 +8,7 @@ export function useUserLocation() {
     longitude: number;
   } | null>(null);
 
+  
 useEffect(() => {
     (async () => {
       let { status } = await Location.requestForegroundPermissionsAsync();

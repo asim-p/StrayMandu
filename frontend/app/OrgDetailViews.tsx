@@ -6,6 +6,7 @@ import {
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
+import * as Location from 'expo-location'; // <--- ADDED THIS
 
 // Firebase Imports
 import { auth, db } from '../src/config/firebase'; 
@@ -31,7 +32,7 @@ interface UserProfile {
 }
 
 const COLORS = {
-  primary: '#39E53D',
+  primary: '#37ec13',
   backgroundLight: '#f6f8f6',
   textMain: '#121811',
   textSub: '#5c6f57',
@@ -56,7 +57,8 @@ export default function OrgDetailViews() {
   const [loading, setLoading] = useState(true);
   const [report, setReport] = useState<DogReportData | null>(null);
   const [reporterUser, setReporterUser] = useState<UserProfile | null>(null);
-  
+  const [displayAddress, setDisplayAddress] = useState("Loading address..."); // <--- NEW STATE FOR ADDRESS
+
   // Organization Management State
   const [isClaimed, setIsClaimed] = useState(false);
   const [isClaimedByOther, setIsClaimedByOther] = useState(false);
@@ -302,7 +304,7 @@ export default function OrgDetailViews() {
         <Pressable onPress={() => router.back()} style={styles.iconButton}>
           <MaterialIcons name="arrow-back" size={24} color={COLORS.textMain} />
         </Pressable>
-        <Text style={styles.headerTitle}>Org View</Text>
+        <Text style={styles.headerTitle}>Organization View</Text>
         <View style={{ width: 40 }} />
       </View>
 
@@ -450,7 +452,8 @@ export default function OrgDetailViews() {
                 <Marker coordinate={report.location} />
               </MapView>
             </View>
-            <Text style={styles.addressTitle}>{report.location.address || "Unknown Address"}</Text>
+            {/* UPDATED TO USE NEW STATE */}
+            <Text style={styles.addressTitle}>{displayAddress}</Text>
           </View>
 
           <View style={styles.reporterCard}>

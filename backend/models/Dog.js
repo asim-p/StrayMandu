@@ -50,6 +50,7 @@ const dogSchema = new mongoose.Schema({
   }
 }, { timestamps: true });
 
+
 // Create a geospatial index to enable proximity searches (e.g., "Find dogs near me")
 dogSchema.index({ location: '2dsphere' });
 

@@ -14,8 +14,8 @@ import {
 } from 'react-native';
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 
-import { dummyReports } from "@/src/data/dummyReports";
-const [strayDogs, setStrayDogs] = useState(dummyReports);
+//import { dummyReports } from "@/src/data/dummyReports";
+//const [strayDogs, setStrayDogs] = useState(dummyReports);
 
 
 const { width, height } = Dimensions.get('window');

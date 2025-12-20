@@ -33,6 +33,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoading(false);
     });
 
+    
     // Cleanup subscription on unmount
     return unsubscribe;
   }, []);

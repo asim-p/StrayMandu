@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const upload = require("../middlewares/upload");
 const auth = require('../middlewares/authMiddleware'); //auth halna baki
+
 const {
   addDog,
   getAllDogs,

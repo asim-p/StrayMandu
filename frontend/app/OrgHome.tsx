@@ -179,10 +179,10 @@ export default function OrgHome() {
               </View>
             </View>
 
-            <Pressable style={styles.reviewButton} onPress={() => router.push('/reports-queue')}>
+            {/* <Pressable style={styles.reviewButton} onPress={() => router.push('/reports-queue')}>
               <MaterialIcons name="fact-check" size={18} color={COLORS.textMain} />
               <Text style={styles.reviewButtonText}>Review Pending Queue</Text>
-            </Pressable>
+            </Pressable> */}
           </View>
         </View>
 
@@ -213,9 +213,11 @@ export default function OrgHome() {
                     </ImageBackground>
                     <View style={styles.cardContent}>
                     <Text style={styles.cardTitle} numberOfLines={1}>{report.breed || 'Injured Stray'}</Text>
-                    <Text style={styles.cardLoc} numberOfLines={1}>
-                        <MaterialIcons name="location-on" size={12} color={COLORS.textSub} /> {report.location?.address || 'Unknown Location'}
-                    </Text>
+                    <View style={styles.locationRow}>
+                      <MaterialIcons name="location-on" size={12} color={COLORS.textSub} />
+                      {/* Use the new component here, passing the location object */}
+                      <LocationAddress location={report.location} />
+                  </View>
                     
                     {/* SINGLE VIEW BUTTON */}
                     <View style={styles.cardButtons}>
@@ -292,6 +294,51 @@ export default function OrgHome() {
     </SafeAreaView>
   );
 }
+// --- NEW COMPONENT FOR LIST ITEMS ---
+const LocationAddress = ({ location }: { location: any }) => {
+  const [displayAddress, setDisplayAddress] = React.useState(
+    location?.address || "Locating..."
+  );
+
+  React.useEffect(() => {
+    // 1. If we already have an address, stop.
+    if (location?.address) return;
+
+    // 2. If we have coordinates, calculate the address
+    const fetchAddress = async () => {
+      try {
+        if (location?.latitude && location?.longitude) {
+          const result = await Location.reverseGeocodeAsync({
+            latitude: location.latitude,
+            longitude: location.longitude,
+          });
+
+          if (result.length > 0) {
+            const place = result[0];
+            // Format: "Street Name, City"
+            const street = place.street || place.name || '';
+            const city = place.city || place.subregion || '';
+            const formatted = [street, city].filter(Boolean).join(', ');
+            setDisplayAddress(formatted);
+          } else {
+            setDisplayAddress("Unknown Location");
+          }
+        }
+      } catch (error) {
+        // Fallback to coordinates if geocoding fails
+        setDisplayAddress(`${location?.latitude.toFixed(2)}, ${location?.longitude.toFixed(2)}`);
+      }
+    };
+
+    fetchAddress();
+  }, [location]);
+
+  return (
+    <Text style={styles.locationText} numberOfLines={1}>
+      {displayAddress}
+    </Text>
+  );
+};
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: COLORS.backgroundLight },
@@ -351,7 +398,18 @@ const styles = StyleSheet.create({
   criticalText: { color: '#FFF', fontSize: 10, fontWeight: '800' },
   cardContent: { padding: 12 },
   cardTitle: { fontSize: 16, fontWeight: '700', color: COLORS.textMain },
-  cardLoc: { fontSize: 12, color: COLORS.textSub, marginTop: 4 },
+  locationRow: {
+    flexDirection: 'row',
+    alignItems: 'center', // Aligns icon and text vertically
+    marginTop: 4,
+    gap: 4, // Adds space between icon and text
+  },
+  locationText: {
+    fontSize: 12,
+    color: COLORS.textSub,
+    flex: 1, // Ensures text takes remaining space but truncates if too long
+  },
+  //cardLoc: { fontSize: 12, color: COLORS.textSub, marginTop: 4 },
   
   // --- BUTTON STYLES ---
   cardButtons: { marginTop: 12 },

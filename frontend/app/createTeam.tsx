@@ -205,6 +205,7 @@ export default function CreateTeam() {
           </View>
         </TouchableWithoutFeedback>
       </Modal>
+      
 
       {/* FOOTER BUTTON */}
       <View style={styles.footer}>

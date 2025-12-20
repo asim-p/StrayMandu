@@ -9,7 +9,7 @@ import * as Location from 'expo-location';
 
 // --- FIREBASE ---
 import { db } from '../src/config/firebase'; 
-import { collection, query, where, getDocs, limit } from 'firebase/firestore';
+import { collection, query, where, getDocs, limit, orderBy } from 'firebase/firestore';
 import OrgBottom from '../src/components/OrgBottom';
 
 const DESIGN = {
@@ -33,6 +33,36 @@ const getTimeAgo = (seconds: number) => {
   if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
   if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
   return `${Math.floor(diff / 86400)}d ago`;
+};
+
+// --- HELPER: STATUS COLORS ---
+const getStatusColors = (status: string) => {
+  const normalized = status ? status.toLowerCase() : 'pending';
+  switch (normalized) {
+    case 'resolved': return { bg: '#dcfce7', text: '#15803d' }; // Green
+    case 'ongoing': return { bg: '#dbeafe', text: '#1d4ed8' }; // Blue
+    case 'acknowledged': return { bg: '#f3e8ff', text: '#7e22ce' }; // Purple
+    case 'pending':
+    default: return { bg: '#f3f4f6', text: '#4b5563' }; // Gray
+  }
+};
+
+// --- HELPER: CONDITION COLORS (NEW) ---
+const getConditionColors = (condition: string) => {
+  const normalized = condition ? condition.toLowerCase() : 'unknown';
+  switch (normalized) {
+    case 'critical':
+      return { bg: '#fee2e2', text: '#ef4444' }; // Red
+    case 'injured':
+      return { bg: '#fff7ed', text: '#c2410c' }; // Deep Orange
+    case 'aggressive':
+      return { bg: '#fae8ff', text: '#86198f' }; // Purple/Violet
+    case 'healthy':
+      return { bg: '#ecfccb', text: '#4d7c0f' }; // Light Green
+    case 'neutral':
+    default:
+      return { bg: '#f3f4f6', text: '#4b5563' }; // Gray
+  }
 };
 
 export default function OrgHome() {
@@ -59,7 +89,13 @@ export default function OrgHome() {
       let { status } = await Location.requestForegroundPermissionsAsync();
       let userLoc = status === 'granted' ? await Location.getCurrentPositionAsync({}) : null;
 
-      const q = query(collection(db, "reports"), where("status", "==", "pending"), limit(30));
+      // UPDATED QUERY: Fetch all reports, sorted by newest first
+      const q = query(
+        collection(db, "reports"), 
+        orderBy("createdAt", "desc"), 
+        limit(50)
+      );
+      
       const snap = await getDocs(q);
       const data = snap.docs.map(doc => {
         const reportData = doc.data();
@@ -74,6 +110,7 @@ export default function OrgHome() {
       });
 
       setAllReports(data);
+      // For nearby, we still calculate distance on the client side
       const nearestList = [...data].sort((a, b) => a.dist - b.dist).slice(0, 5);
       setNearby(nearestList);
       setLoading(false);
@@ -90,8 +127,9 @@ export default function OrgHome() {
     } else if (sortBy === 'Distance') {
       sorted.sort((a, b) => a.dist - b.dist);
     } else if (sortBy === 'Urgency') {
-      const order: any = { 'Critical': 0, 'Injured': 1, 'Pending': 2 };
-      sorted.sort((a, b) => (order[a.condition] ?? 3) - (order[b.condition] ?? 3));
+      // Prioritize Critical, then Injured, then others
+      const order: any = { 'Critical': 0, 'Injured': 1, 'Aggressive': 2, 'Healthy': 3, 'Neutral': 4 };
+      sorted.sort((a, b) => (order[a.condition] ?? 5) - (order[b.condition] ?? 5));
     }
     setRecent(sorted);
   };
@@ -167,7 +205,7 @@ export default function OrgHome() {
         {/* --- RECENT REPORTS LIST --- */}
         <View style={styles.section}>
           <View style={[styles.sectionHeader, { paddingHorizontal: 16 }]}>
-            <Text style={styles.sectionTitle}>Recent Reports</Text>
+            <Text style={styles.sectionTitle}>All Reports</Text>
             
             <Pressable style={styles.sortBtn} onPress={() => setShowFilterModal(true)}>
               <Text style={styles.sortText}>Sort by: {sortBy}</Text>
@@ -176,27 +214,48 @@ export default function OrgHome() {
           </View>
 
           <View style={styles.listContainer}>
-            {recent.map(item => (
-              <Pressable key={item.id} style={styles.recentRow} onPress={() => router.push({ pathname: '/OrgDetailViews', params: { id: item.id } })}>
-                <Image source={{ uri: item.imageUrls?.[0] }} style={styles.rowImg} />
-                <View style={styles.rowContent}>
-                  <View style={styles.rowHeader}>
-                    <View style={styles.rowTitleArea}>
-                        <Text style={styles.rowId}>#{item.id.slice(-4)}</Text>
-                        <View style={[styles.rowBadge, { backgroundColor: item.condition === 'Critical' ? DESIGN.dangerBg : DESIGN.warningBg }]}>
-                            <Text style={[styles.rowBadgeText, { color: item.condition === 'Critical' ? DESIGN.danger : DESIGN.warning }]}>{item.condition}</Text>
-                        </View>
+            {recent.map(item => {
+              // 1. Get COLORS
+              const statusColor = getStatusColors(item.status);
+              const conditionColor = getConditionColors(item.condition);
+              
+              return (
+                <Pressable key={item.id} style={styles.recentRow} onPress={() => router.push({ pathname: '/OrgDetailViews', params: { id: item.id } })}>
+                  <Image source={{ uri: item.imageUrls?.[0] }} style={styles.rowImg} />
+                  <View style={styles.rowContent}>
+                    
+                    {/* Header Row: ID, Badges, Time */}
+                    <View style={styles.rowHeader}>
+                      <View style={styles.rowTitleArea}>
+                          <Text style={styles.rowId}>#{item.id.slice(-4)}</Text>
+                          
+                          {/* UPDATED: Condition Badge using helper */}
+                          <View style={[styles.rowBadge, { backgroundColor: conditionColor.bg }]}>
+                              <Text style={[styles.rowBadgeText, { color: conditionColor.text }]}>
+                                {item.condition}
+                              </Text>
+                          </View>
+
+                          {/* Status Badge */}
+                          <View style={[styles.rowBadge, { backgroundColor: statusColor.bg }]}>
+                              <Text style={[styles.rowBadgeText, { color: statusColor.text, textTransform: 'uppercase' }]}>
+                                {item.status || 'PENDING'}
+                              </Text>
+                          </View>
+                      </View>
+                      <Text style={styles.rowTime}>{getTimeAgo(item.createdAt?.seconds)}</Text>
                     </View>
-                    <Text style={styles.rowTime}>{getTimeAgo(item.createdAt?.seconds)}</Text>
+
+                    <Text style={styles.rowTitle} numberOfLines={1}>{item.breed || 'Reported Dog'}</Text>
+                    
+                    <View style={styles.rowFooter}>
+                      <Text style={styles.rowLocText} numberOfLines={1}>{item.location?.address}</Text>
+                      <View style={styles.rowActionBtn}><MaterialIcons name="arrow-forward" size={14} color="black" /></View>
+                    </View>
                   </View>
-                  <Text style={styles.rowTitle} numberOfLines={1}>{item.breed || 'Reported Dog'}</Text>
-                  <View style={styles.rowFooter}>
-                    <Text style={styles.rowLocText} numberOfLines={1}>{item.location?.address}</Text>
-                    <View style={styles.rowActionBtn}><MaterialIcons name="arrow-forward" size={14} color="black" /></View>
-                  </View>
-                </View>
-              </Pressable>
-            ))}
+                </Pressable>
+              );
+            })}
           </View>
         </View>
       </ScrollView>
@@ -257,13 +316,18 @@ const styles = StyleSheet.create({
   recentRow: { flexDirection: 'row', backgroundColor: '#FFF', padding: 12, borderRadius: 24, elevation: 1 },
   rowImg: { width: 75, height: 75, borderRadius: 16 },
   rowContent: { flex: 1, marginLeft: 12, justifyContent: 'space-between' },
+  
+  // UPDATED ROW HEADER for multiple badges
   rowHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  rowTitleArea: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  rowId: { fontSize: 12, fontWeight: '800' },
+  rowTitleArea: { flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1, flexWrap: 'wrap' },
+  
+  rowId: { fontSize: 12, fontWeight: '800', marginRight: 2 },
   rowBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8 },
   rowBadgeText: { fontSize: 9, fontWeight: '800' },
-  rowTime: { fontSize: 10, color: DESIGN.textSub },
-  rowTitle: { fontSize: 15, fontWeight: '700', marginVertical: 2 },
+  
+  rowTime: { fontSize: 10, color: DESIGN.textSub, marginLeft: 4 },
+  rowTitle: { fontSize: 15, fontWeight: '700', marginVertical: 4 },
+  
   rowFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   rowLocText: { fontSize: 11, color: DESIGN.textSub, flex: 1 },
   rowActionBtn: { backgroundColor: DESIGN.primary, width: 28, height: 28, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
