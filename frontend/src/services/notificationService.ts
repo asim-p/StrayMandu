@@ -1,3 +1,4 @@
+// frontend/src/services/notificationService.ts
 import { 
   collection, 
   addDoc, 
@@ -13,8 +14,6 @@ import {
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
 
-// --- 1. EXPORT THE INTERFACE ---
-// This fixes: Module '...' has no exported member 'Notification'
 export interface Notification {
   id: string;
   userId: string;
@@ -27,22 +26,8 @@ export interface Notification {
 }
 
 export const notificationService = {
-  // Create a new notification
-  sendNotification: async (userId: string, data: Partial<Omit<Notification, 'id' | 'createdAt' | 'isRead'>>) => {
-    try {
-      await addDoc(collection(db, 'notifications'), {
-        ...data,
-        userId,
-        isRead: false,
-        createdAt: serverTimestamp(),
-      });
-    } catch (error) {
-      console.error("Error sending notification:", error);
-    }
-  },
-
-  // Listen to notifications (Renamed to 'subscribe' to match your Screen call)
-  subscribe: (userId: string, callback: (notis: Notification[]) => void) => {
+  // Changed name to subscribeToNotifications to match your UI component
+  subscribeToNotifications: (userId: string, callback: (notis: Notification[]) => void) => {
     const q = query(
       collection(db, 'notifications'),
       where('userId', '==', userId),
@@ -58,7 +43,6 @@ export const notificationService = {
     });
   },
 
-  // Mark all as read
   markAllAsRead: async (notifications: Notification[]) => {
     const unread = notifications.filter(n => !n.isRead);
     if (unread.length === 0) return;
@@ -71,7 +55,6 @@ export const notificationService = {
     return await batch.commit();
   },
 
-  // Mark single as read
   markAsRead: async (notificationId: string) => {
     const ref = doc(db, 'notifications', notificationId);
     return await updateDoc(ref, { isRead: true });

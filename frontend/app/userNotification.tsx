@@ -8,13 +8,13 @@ import {
   ScrollView,
   StatusBar,
   Dimensions,
-  Image,
   ActivityIndicator,
 } from 'react-native';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../src/context/AuthContext';
-import { notificationService } from '../src/services/notificationService';
+// Import both the service and the interface
+import { notificationService, Notification } from '../src/services/notificationService';
 import BottomNav from '../src/components/BottomNav';
 
 const { width } = Dimensions.get('window');
@@ -24,7 +24,7 @@ const DESIGN = {
   background: '#f6f8f6',
   white: '#ffffff',
   textMain: '#121811',
-  textSub: '#64748b', // neutral-500
+  textSub: '#64748b',
   border: '#f1f5f9',
 };
 
@@ -34,7 +34,8 @@ export default function UserNotification() {
   const router = useRouter();
   const { user } = useAuth();
   
-  const [notifications, setNotifications] = useState<any[]>([]);
+  // Use the Notification interface instead of any[]
+  const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('All');
 
@@ -45,6 +46,7 @@ export default function UserNotification() {
       return;
     }
 
+    // This matches the subscribeToNotifications name in your service
     const unsubscribe = notificationService.subscribeToNotifications(
       user.uid, 
       (data) => {
@@ -160,13 +162,13 @@ export default function UserNotification() {
                 </View>
 
                 {/* Right side status */}
-                <View style={styles.rightStatus}>
+                <div style={styles.rightStatus as any}>
                   {!item.isRead ? (
                     <View style={styles.greenDot} />
                   ) : (
                     <MaterialIcons name="chevron-right" size={20} color="#cbd5e1" />
                   )}
-                </View>
+                </div>
               </View>
             </Pressable>
           ))
@@ -187,6 +189,8 @@ const getIconName = (type: string): any => {
     case 'chat_bubble': return 'message-text';
     case 'pets': return 'paw';
     case 'campaign': return 'bullhorn';
+    case 'warning': return 'alert-circle';
+    case 'assignment_turned_in': return 'clipboard-check';
     default: return 'bell';
   }
 };
@@ -197,6 +201,7 @@ const getIconColor = (type: string) => {
     case 'chat_bubble': return '#3b82f6';
     case 'pets': return '#f97316';
     case 'campaign': return '#3b82f6';
+    case 'warning': return '#ef4444';
     default: return '#37ec13';
   }
 };
