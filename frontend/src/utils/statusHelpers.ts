@@ -15,5 +15,6 @@ export const getStatusColor = (status: ReportStatus) => {
   }
 };
 
+
 export const getStatusLabel = (status: ReportStatus) =>
   status.charAt(0).toUpperCase() + status.slice(1);

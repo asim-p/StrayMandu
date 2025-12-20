@@ -87,6 +87,7 @@ export default function StyledAlert({
   );
 }
 
+
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,

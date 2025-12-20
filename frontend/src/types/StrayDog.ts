@@ -4,6 +4,7 @@ export type ReportStatus =
   | "vaccinated"
   | "relocated";
 
+  
 export interface StrayDog {
   id: string;
   location: {
