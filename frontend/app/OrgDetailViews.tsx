@@ -1,19 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import {
-  SafeAreaView,
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  Image,
-  Pressable,
-  StatusBar,
-  Dimensions,
-  ActivityIndicator,
-  Alert,
-  Platform,
-  Linking,
-  Modal
+  SafeAreaView, View, Text, StyleSheet, ScrollView, Image, Pressable,
+  StatusBar, Dimensions, ActivityIndicator, Alert, Platform, Linking, Modal
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -23,12 +11,12 @@ import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import { auth, db } from '../src/config/firebase'; 
 import { doc, getDoc, updateDoc, collection, query, where, getDocs } from 'firebase/firestore';
 
-// Types
+// Types & Services
 import { DogReportData } from '../src/services/reportService';
+import { notificationService } from '../src/services/notificationService';
 
 const { width } = Dimensions.get('window');
 
-// Define Team Interface
 interface Team {
   id: string;
   name: string;
@@ -50,6 +38,8 @@ const COLORS = {
   white: '#FFFFFF',
   red: '#EF4444',
   cardBorder: '#F3F4F6',
+  locked: '#64748b', 
+  lockedBg: '#f1f5f9'
 };
 
 const mapStyle = [
@@ -69,7 +59,11 @@ export default function OrgDetailViews() {
   
   // Organization Management State
   const [isClaimed, setIsClaimed] = useState(false);
-  const [currentStatus, setCurrentStatus] = useState('pending'); // Default status
+  const [isClaimedByOther, setIsClaimedByOther] = useState(false);
+  const [claimingOrgName, setClaimingOrgName] = useState('Loading...'); // Default while fetching
+  const [claimingOrgImage, setClaimingOrgImage] = useState<string | null>(null); // Organization's profile image
+  
+  const [currentStatus, setCurrentStatus] = useState('pending'); 
   const [assignedTeam, setAssignedTeam] = useState('Unassigned');
   const [saving, setSaving] = useState(false);
 
@@ -83,6 +77,7 @@ export default function OrgDetailViews() {
       if (!id) return;
       try {
         setLoading(true);
+        const currentUser = auth.currentUser;
         
         // 1. Fetch Report
         const docRef = doc(db, 'reports', id as string);
@@ -92,15 +87,45 @@ export default function OrgDetailViews() {
           const reportData = docSnap.data() as DogReportData;
           setReport(reportData);
           
-          // Set Status from DB
           setCurrentStatus(reportData.status || 'pending');
           setAssignedTeam(reportData.assignedTeam || 'Unassigned');
 
-          // Check if claimed (rescuerID exists)
+          // --- LOGIC: Handle Claims & Fetch Rescuer Info ---
           if (reportData.rescuerID) {
             setIsClaimed(true);
+
+            // Check if it is MY organization
+            if (currentUser && reportData.rescuerID === currentUser.uid) {
+              // It's me - do nothing special
+              setIsClaimedByOther(false);
+            } else {
+              // It is ANOTHER organization -> FETCH THEIR DETAILS
+              setIsClaimedByOther(true);
+              
+              try {
+                // Use the rescuerID to look up the organization in 'users'
+                const rescuerRef = doc(db, 'users', reportData.rescuerID);
+                const rescuerSnap = await getDoc(rescuerRef);
+
+                if (rescuerSnap.exists()) {
+                  const rescuerData = rescuerSnap.data();
+                  // Fallback: Check 'name', then 'orgName', then default
+                  setClaimingOrgName(rescuerData.name || rescuerData.orgName || 'Unknown Organization');
+                  // Fetch the organization's profile image
+                  setClaimingOrgImage(rescuerData.photoURL || null);
+                } else {
+                  setClaimingOrgName('Unknown Organization');
+                  setClaimingOrgImage(null);
+                }
+              } catch (err) {
+                console.error("Error fetching rescuer details:", err);
+                setClaimingOrgName('Network Error');
+                setClaimingOrgImage(null);
+              }
+            }
           }
 
+          // Fetch Reporter Info (The user who posted the dog)
           if (reportData.reporterId) {
             const userRef = doc(db, 'users', reportData.reporterId);
             const userSnap = await getDoc(userRef);
@@ -121,44 +146,12 @@ export default function OrgDetailViews() {
     fetchFullData();
   }, [id]);
 
-  // --- FETCH TEAMS ---
-  const fetchOrgTeams = async () => {
-    const user = auth.currentUser;
-    if (!user) return;
+  // --- ACTIONS ---
 
-    if (teams.length > 0) {
-      setShowTeamModal(true);
-      return;
-    }
-
-    try {
-      setLoadingTeams(true);
-      const q = query(
-        collection(db, 'teams'),
-        where('orgId', '==', user.uid)
-      );
-      
-      const querySnapshot = await getDocs(q);
-      const teamList: Team[] = querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      } as Team));
-
-      setTeams(teamList);
-      setShowTeamModal(true);
-    } catch (error) {
-      console.error("Error fetching teams", error);
-      Alert.alert("Error", "Could not load your teams.");
-    } finally {
-      setLoadingTeams(false);
-    }
-  };
-
-  // --- ACTION: TAKE RESPONSIBILITY ---
   const handleTakeResponsibility = async () => {
     Alert.alert(
       "Confirm Rescue",
-      "By taking responsibility, the report status will change to 'Acknowledged' and other organizations will be locked out.",
+      "By taking responsibility, you lock this case. Your organization's name will be visible to others.",
       [
         { text: "Cancel", style: "cancel" },
         { 
@@ -171,7 +164,8 @@ export default function OrgDetailViews() {
 
               const reportRef = doc(db, 'reports', id as string);
               
-              // UPDATE: Set rescuerID AND change status to 'acknowledged'
+              // We just save the ID and status. 
+              // The UI will fetch our name automatically next time using the logic above.
               await updateDoc(reportRef, {
                 rescuerID: currentUser.uid,
                 status: 'acknowledged',
@@ -180,7 +174,7 @@ export default function OrgDetailViews() {
 
               setIsClaimed(true);
               setCurrentStatus('acknowledged');
-              Alert.alert("Success", "You have taken responsibility. Status is now 'Acknowledged'.");
+              Alert.alert("Success", "You have claimed this case.");
             } catch (err) {
               Alert.alert("Error", "Failed to update status.");
             } finally {
@@ -192,23 +186,35 @@ export default function OrgDetailViews() {
     );
   };
 
-  // --- ACTION: SELECT TEAM ---
+  const fetchOrgTeams = async () => {
+    if (isClaimedByOther) return;
+    const user = auth.currentUser;
+    if (!user) return;
+    if (teams.length > 0) {
+      setShowTeamModal(true);
+      return;
+    }
+    try {
+      setLoadingTeams(true);
+      const q = query(collection(db, 'teams'), where('orgId', '==', user.uid));
+      const querySnapshot = await getDocs(q);
+      const teamList: Team[] = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Team));
+      setTeams(teamList);
+      setShowTeamModal(true);
+    } catch (error) {
+      Alert.alert("Error", "Could not load teams.");
+    } finally {
+      setLoadingTeams(false);
+    }
+  };
+
   const handleSelectTeam = async (team: Team) => {
     try {
       setSaving(true);
       setShowTeamModal(false);
-      
       const reportRef = doc(db, 'reports', id as string);
-      
-      // Assign team and optionally update status to 'ongoing' if user prefers, 
-      // but for now we just assign the team.
-      await updateDoc(reportRef, {
-        assignedTeam: team.name,
-        assignedTeamId: team.id
-      });
-
+      await updateDoc(reportRef, { assignedTeam: team.name, assignedTeamId: team.id });
       setAssignedTeam(team.name);
-      
     } catch (error) {
       Alert.alert("Error", "Failed to assign team.");
     } finally {
@@ -216,9 +222,8 @@ export default function OrgDetailViews() {
     }
   };
 
-  // --- ACTION: UPDATE STATUS ---
   const handleChangeStatus = () => {
-    if (!isClaimed) return;
+    if (!isClaimed || isClaimedByOther) return;
     Alert.alert("Update Status", "Select current rescue status:", [
       { text: "Acknowledged", onPress: () => updateStatusDB("acknowledged") },
       { text: "Ongoing (Rescue in progress)", onPress: () => updateStatusDB("ongoing") },
@@ -230,11 +235,29 @@ export default function OrgDetailViews() {
 
   const updateStatusDB = async (newStatus: string) => {
      try {
+        const currentUser = auth.currentUser;
         const reportRef = doc(db, 'reports', id as string);
+        
+        // Update the report status in Firebase
         await updateDoc(reportRef, { status: newStatus });
         setCurrentStatus(newStatus);
-     } catch (e) {
-        Alert.alert("Error updating status");
+
+        // Create a notification for the user who reported the dog
+        if (report && report.reporterId) {
+          await notificationService.createStatusChangeNotification(
+            report.reporterId,
+            id as string,
+            report.name || 'Unknown Dog',
+            report.breed || 'Unknown Breed',
+            newStatus,
+            claimingOrgName || 'Your Organization'
+          );
+        }
+
+        Alert.alert("Success", `Status updated to ${newStatus}`);
+     } catch (e) { 
+        Alert.alert("Error", "Failed to update status");
+        console.error(e);
      }
   };
 
@@ -257,13 +280,12 @@ export default function OrgDetailViews() {
     );
   }
 
-  // Helper to color code status
   const getStatusColor = (status: string) => {
     switch(status) {
-      case 'pending': return '#F59E0B'; // Orange
-      case 'ongoing': return '#3B82F6'; // Blue
-      case 'resolved': return '#10B981'; // Green
-      case 'completed': return '#6B7280'; // Gray
+      case 'pending': return '#F59E0B'; 
+      case 'ongoing': return '#3B82F6'; 
+      case 'resolved': return '#10B981'; 
+      case 'completed': return '#6B7280'; 
       default: return COLORS.textMain;
     }
   };
@@ -271,8 +293,6 @@ export default function OrgDetailViews() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" />
-
-      {/* Header */}
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} style={styles.iconButton}>
           <MaterialIcons name="arrow-back" size={24} color={COLORS.textMain} />
@@ -282,8 +302,6 @@ export default function OrgDetailViews() {
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-        
-        {/* Carousel */}
         <ScrollView horizontal pagingEnabled showsHorizontalScrollIndicator={false} style={styles.imageCarousel}>
           {report.imageUrls && report.imageUrls.length > 0 ? (
             report.imageUrls.map((url, index) => (
@@ -297,8 +315,6 @@ export default function OrgDetailViews() {
         </ScrollView>
 
         <View style={styles.mainContainer}>
-          
-          {/* Header Info */}
           <View style={styles.titleRow}>
             <View style={styles.nameHeader}>
               <Text style={styles.dogName}>{report.name || 'Unnamed Dog'}</Text>
@@ -316,70 +332,93 @@ export default function OrgDetailViews() {
             </View>
           </View>
 
-          {/* MANAGEMENT SECTION */}
-          <View style={styles.managementSection}>
-            <View style={styles.mgmtHeader}>
-              <MaterialIcons name="admin-panel-settings" size={20} color={COLORS.primary} />
-              <Text style={styles.mgmtTitle}>Internal Management</Text>
-            </View>
-
-            <View style={[styles.controlGrid, !isClaimed && styles.disabledArea]}>
-              
-              {/* Status Selector */}
-              <Pressable style={styles.controlBox} onPress={handleChangeStatus} disabled={!isClaimed}>
-                <Text style={styles.controlLabel}>CURRENT STATUS</Text>
-                <View style={styles.controlValueRow}>
-                  <Text style={[styles.controlValue, { color: getStatusColor(currentStatus), textTransform: 'capitalize' }]}>
-                    {currentStatus}
-                  </Text>
-                  <MaterialIcons name="arrow-drop-down" size={24} color={COLORS.textSub} />
+          {/* MANAGEMENT SECTION (Dynamic Logic) */}
+          {isClaimedByOther ? (
+             <View style={styles.lockedSection}>
+                <View style={styles.lockedHeader}>
+                   <MaterialIcons name="lock" size={24} color={COLORS.locked} />
+                   <Text style={styles.lockedTitle}>CASE LOCKED</Text>
                 </View>
-              </Pressable>
-
-              {/* Team Selector */}
-              <Pressable style={styles.controlBox} onPress={fetchOrgTeams} disabled={!isClaimed}>
-                <Text style={styles.controlLabel}>ASSIGNED TEAM</Text>
-                <View style={styles.controlValueRow}>
-                  <Text style={styles.controlValue}>{assignedTeam}</Text>
-                  {loadingTeams ? (
-                     <ActivityIndicator size="small" color={COLORS.primary} />
-                  ) : (
-                     <MaterialIcons name="group-add" size={20} color={COLORS.textSub} />
-                  )}
-                </View>
-              </Pressable>
-            </View>
-
-            {/* Take Responsibility Button */}
-            {!isClaimed ? (
-              <Pressable 
-                style={({ pressed }) => [styles.claimButton, pressed && { opacity: 0.9 }]} 
-                onPress={handleTakeResponsibility}
-              >
-                {saving ? (
-                  <ActivityIndicator color={COLORS.textMain} />
+                <Text style={styles.lockedText}>This report is handled by:</Text>
+                
+                {/* Organization Profile Image */}
+                {claimingOrgImage ? (
+                  <Image 
+                    source={{ uri: claimingOrgImage }} 
+                    style={styles.claimingOrgImage}
+                  />
                 ) : (
-                  <>
-                    <MaterialIcons name="shield" size={20} color={COLORS.textMain} style={{ marginRight: 8 }} />
-                    <Text style={styles.claimButtonText}>Take Responsibility</Text>
-                  </>
+                  <View style={[styles.claimingOrgImage, { backgroundColor: COLORS.textSub, justifyContent: 'center', alignItems: 'center' }]}>
+                    <MaterialIcons name="domain" size={40} color={COLORS.white} />
+                  </View>
                 )}
-              </Pressable>
-            ) : (
-              <View style={styles.activeFooter}>
-                 <Text style={styles.activeText}>Managed by your organization</Text>
-                 <MaterialIcons name="check-circle" size={24} color={COLORS.primary} />
-              </View>
-            )}
-          </View>
+                
+                {/* Dynamically Fetched Name */}
+                <Text style={styles.claimingOrgName}>{claimingOrgName}</Text>
+                
+                <View style={styles.lockedFooter}>
+                   <Text style={styles.lockedFooterText}>You cannot perform actions on this case.</Text>
+                </View>
+             </View>
+          ) : (
+             <View style={styles.managementSection}>
+               <View style={styles.mgmtHeader}>
+                 <MaterialIcons name="admin-panel-settings" size={20} color={COLORS.primary} />
+                 <Text style={styles.mgmtTitle}>Internal Management</Text>
+               </View>
 
-          {/* Description */}
+               <View style={[styles.controlGrid, !isClaimed && styles.disabledArea]}>
+                 <Pressable style={styles.controlBox} onPress={handleChangeStatus} disabled={!isClaimed}>
+                   <Text style={styles.controlLabel}>CURRENT STATUS</Text>
+                   <View style={styles.controlValueRow}>
+                     <Text style={[styles.controlValue, { color: getStatusColor(currentStatus), textTransform: 'capitalize' }]}>
+                       {currentStatus}
+                     </Text>
+                     <MaterialIcons name="arrow-drop-down" size={24} color={COLORS.textSub} />
+                   </View>
+                 </Pressable>
+
+                 <Pressable style={styles.controlBox} onPress={fetchOrgTeams} disabled={!isClaimed}>
+                   <Text style={styles.controlLabel}>ASSIGNED TEAM</Text>
+                   <View style={styles.controlValueRow}>
+                     <Text style={styles.controlValue}>{assignedTeam}</Text>
+                     {loadingTeams ? (
+                        <ActivityIndicator size="small" color={COLORS.primary} />
+                     ) : (
+                        <MaterialIcons name="group-add" size={20} color={COLORS.textSub} />
+                     )}
+                   </View>
+                 </Pressable>
+               </View>
+
+               {!isClaimed ? (
+                 <Pressable 
+                   style={({ pressed }) => [styles.claimButton, pressed && { opacity: 0.9 }]} 
+                   onPress={handleTakeResponsibility}
+                 >
+                   {saving ? (
+                     <ActivityIndicator color={COLORS.textMain} />
+                   ) : (
+                     <>
+                       <MaterialIcons name="shield" size={20} color={COLORS.textMain} style={{ marginRight: 8 }} />
+                       <Text style={styles.claimButtonText}>Take Responsibility</Text>
+                     </>
+                   )}
+                 </Pressable>
+               ) : (
+                 <View style={styles.activeFooter}>
+                    <Text style={styles.activeText}>Managed by your organization</Text>
+                    <MaterialIcons name="check-circle" size={24} color={COLORS.primary} />
+                 </View>
+               )}
+             </View>
+          )}
+
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Description</Text>
             <Text style={styles.descriptionText}>{report.description}</Text>
           </View>
 
-          {/* Location */}
           <View style={styles.locationSection}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>Location</Text>
@@ -409,7 +448,6 @@ export default function OrgDetailViews() {
             <Text style={styles.addressTitle}>{report.location.address || "Unknown Address"}</Text>
           </View>
 
-          {/* Reporter Info */}
           <View style={styles.reporterCard}>
             <View style={styles.reporterInfo}>
               {reporterUser?.photoURL ? (
@@ -421,9 +459,7 @@ export default function OrgDetailViews() {
               )}
               <View>
                 <Text style={styles.reporterLabel}>REPORTED BY</Text>
-                <Text style={styles.reporterName}>
-                  {reporterUser?.name || 'Anonymous User'}
-                </Text>
+                <Text style={styles.reporterName}>{reporterUser?.name || 'Anonymous User'}</Text>
               </View>
             </View>
             <Pressable 
@@ -433,7 +469,6 @@ export default function OrgDetailViews() {
               <MaterialIcons name="call" size={20} color={COLORS.primary} />
             </Pressable>
           </View>
-          
         </View>
       </ScrollView>
 
@@ -519,7 +554,16 @@ const styles = StyleSheet.create({
   claimButtonText: { color: COLORS.textMain, fontSize: 14, fontWeight: '800' },
   activeFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 16, paddingTop: 10, borderTopWidth: 1, borderTopColor: COLORS.cardBorder },
   activeText: { color: COLORS.primary, fontWeight: '700', fontSize: 12 },
-  
+
+  lockedSection: { backgroundColor: COLORS.lockedBg, borderRadius: 16, padding: 20, borderWidth: 1, borderColor: '#e2e8f0', marginBottom: 20, alignItems: 'center' },
+  lockedHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
+  lockedTitle: { color: COLORS.locked, fontSize: 14, fontWeight: '900', letterSpacing: 1 },
+  lockedText: { color: COLORS.textSub, fontSize: 14, marginBottom: 12 },
+  claimingOrgImage: { width: 80, height: 80, borderRadius: 16, marginBottom: 12, borderWidth: 2, borderColor: COLORS.cardBorder },
+  claimingOrgName: { fontSize: 18, fontWeight: '800', color: COLORS.textMain, marginBottom: 10, textAlign: 'center' },
+  lockedFooter: { marginTop: 10, borderTopWidth: 1, borderTopColor: '#e2e8f0', width: '100%', alignItems: 'center', paddingTop: 10 },
+  lockedFooterText: { color: '#94a3b8', fontSize: 11, fontWeight: '600' },
+
   section: { marginBottom: 24 },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
   sectionTitle: { fontSize: 16, fontWeight: '800', color: COLORS.textMain },

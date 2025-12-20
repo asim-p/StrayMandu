@@ -1,295 +1,430 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   SafeAreaView,
   View,
   Text,
   StyleSheet,
-  Pressable,
   ScrollView,
+  Pressable,
   StatusBar,
-  Dimensions,
   ActivityIndicator,
+  FlatList,
+  Alert
 } from 'react-native';
-import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useAuth } from '../src/context/AuthContext';
-// Import both the service and the interface
+import { auth } from '../src/config/firebase';
 import { notificationService, Notification } from '../src/services/notificationService';
-import BottomNav from '../src/components/BottomNav';
 
-const { width } = Dimensions.get('window');
-
-const DESIGN = {
+const COLORS = {
   primary: '#37ec13',
-  background: '#f6f8f6',
-  white: '#ffffff',
+  backgroundLight: '#f6f8f6',
   textMain: '#121811',
-  textSub: '#64748b',
-  border: '#f1f5f9',
+  textSub: '#5c6f57',
+  white: '#FFFFFF',
+  unread: '#FEF3C7',
+  read: '#F3F4F6',
+  border: '#E5E7EB',
 };
-
-const CATEGORIES = ['All', 'Reports', 'Adoptions', 'Announcements'];
 
 export default function UserNotification() {
   const router = useRouter();
-  const { user } = useAuth();
-  
-  // Use the Notification interface instead of any[]
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('All');
+  const [unreadCount, setUnreadCount] = useState(0);
 
-  // --- FETCH REAL-TIME DATA ---
   useEffect(() => {
-    if (!user?.uid) {
-      setLoading(false);
+    const user = auth.currentUser;
+    if (!user) {
+      Alert.alert('Error', 'You must be logged in to view notifications');
+      router.back();
       return;
     }
 
-    // This matches the subscribeToNotifications name in your service
+    setLoading(true);
+
+    // Subscribe to real-time notifications
     const unsubscribe = notificationService.subscribeToNotifications(
-      user.uid, 
-      (data) => {
-        setNotifications(data);
+      user.uid,
+      (notis) => {
+        setNotifications(notis);
+        setUnreadCount(notis.filter(n => !n.isRead).length);
         setLoading(false);
       }
     );
 
     return () => unsubscribe();
-  }, [user]);
+  }, []);
 
-  // --- ACTIONS ---
-  const handleMarkAllRead = async () => {
+  const handleMarkAsRead = async (notification: Notification) => {
+    try {
+      await notificationService.markAsRead(notification.id);
+    } catch (error) {
+      Alert.alert('Error', 'Failed to mark as read');
+    }
+  };
+
+  const handleMarkAllAsRead = async () => {
     try {
       await notificationService.markAllAsRead(notifications);
+      Alert.alert('Success', 'All notifications marked as read');
     } catch (error) {
-      console.error("Error marking all read:", error);
+      Alert.alert('Error', 'Failed to mark all as read');
     }
   };
 
-  const handleItemPress = async (id: string, isRead: boolean) => {
-    if (!isRead) {
-      await notificationService.markAsRead(id);
+  const handleNotificationPress = (notification: Notification) => {
+    // Mark as read if not already
+    if (!notification.isRead) {
+      handleMarkAsRead(notification);
     }
-    // Optionally navigate to specific report/detail here
+
+    // Navigate to the report detail page
+    if (notification.reportId) {
+      router.push({
+        pathname: '/detailReports',
+        params: { id: notification.reportId }
+      });
+    }
   };
 
-  // --- FILTERING ---
-  const filteredNotis = notifications.filter((n) => {
-    if (activeTab === 'All') return true;
-    return n.category === activeTab;
-  });
+  const getNotificationIcon = (type: string) => {
+    switch (type) {
+      case 'assignment_turned_in':
+        return 'check-circle';
+      case 'warning':
+        return 'warning';
+      case 'check_circle':
+        return 'verified';
+      default:
+        return 'notifications';
+    }
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status?.toLowerCase()) {
+      case 'acknowledged':
+        return '#3B82F6';
+      case 'ongoing':
+        return '#F59E0B';
+      case 'resolved':
+        return '#10B981';
+      case 'completed':
+        return '#6B7280';
+      default:
+        return COLORS.textSub;
+    }
+  };
+
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <StatusBar barStyle="dark-content" />
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={COLORS.primary} />
+          <Text style={{ marginTop: 12, color: COLORS.textSub }}>Loading notifications...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" />
 
-      {/* --- TOP BAR --- */}
-      <View style={styles.headerContainer}>
-        <View style={styles.headerTopRow}>
-          <Pressable onPress={() => router.back()} style={styles.backBtn}>
-            <MaterialIcons name="arrow-back" size={24} color={DESIGN.textMain} />
-          </Pressable>
-          <Pressable onPress={handleMarkAllRead}>
-            <Text style={styles.markAllText}>Mark all read</Text>
-          </Pressable>
-        </View>
-        <Text style={styles.pageTitle}>Notifications</Text>
-      </View>
-
-      {/* --- FILTER TABS --- */}
-      <View style={styles.filterBar}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterScroll}>
-          {CATEGORIES.map((cat) => (
-            <Pressable
-              key={cat}
-              onPress={() => setActiveTab(cat)}
-              style={[styles.chip, activeTab === cat && styles.chipActive]}
-            >
-              <Text style={[styles.chipText, activeTab === cat && styles.chipTextActive]}>
-                {cat}
-              </Text>
-            </Pressable>
-          ))}
-        </ScrollView>
-      </View>
-
-      {/* --- NOTIFICATION LIST --- */}
-      <ScrollView contentContainerStyle={styles.listContent} showsVerticalScrollIndicator={false}>
-        {loading ? (
-          <View style={styles.center}>
-            <ActivityIndicator size="large" color={DESIGN.primary} />
-          </View>
-        ) : filteredNotis.length === 0 ? (
-          <View style={styles.emptyState}>
-            <View style={styles.emptyIconCircle}>
-              <MaterialIcons name="notifications-off" size={48} color="#cbd5e1" />
+      {/* Header */}
+      <View style={styles.header}>
+        <Pressable onPress={() => router.back()} style={styles.iconButton}>
+          <MaterialIcons name="arrow-back" size={24} color={COLORS.textMain} />
+        </Pressable>
+        <View style={styles.headerTitleContainer}>
+          <Text style={styles.headerTitle}>Notifications</Text>
+          {unreadCount > 0 && (
+            <View style={styles.unreadBadge}>
+              <Text style={styles.unreadBadgeText}>{unreadCount}</Text>
             </View>
-            <Text style={styles.emptyTitle}>No new notifications</Text>
-            <Text style={styles.emptySub}>We'll let you know when there are updates.</Text>
-          </View>
-        ) : (
-          filteredNotis.map((item) => (
-            <Pressable 
-              key={item.id} 
-              onPress={() => handleItemPress(item.id, item.isRead)}
-              style={[styles.notiItem, !item.isRead && styles.notiUnread]}
-            >
-              {/* Green vertical bar for unread */}
-              {!item.isRead && <View style={styles.unreadIndicator} />}
-
-              <View style={styles.notiMainRow}>
-                {/* Icon/Avatar logic */}
-                <View style={[styles.iconContainer, { backgroundColor: `${getIconColor(item.type)}15` }]}>
-                    <MaterialCommunityIcons 
-                      name={getIconName(item.type)} 
-                      size={24} 
-                      color={getIconColor(item.type)} 
-                    />
-                </View>
-
-                {/* Text Content */}
-                <View style={styles.textWrapper}>
-                  <View style={styles.textTopRow}>
-                    <Text style={[styles.notiTitle, item.isRead && styles.textDimmed]}>{item.title}</Text>
-                    <Text style={styles.notiTime}>
-                      {item.createdAt?.seconds ? formatTime(item.createdAt.seconds) : 'Just now'}
-                    </Text>
-                  </View>
-                  <Text style={[styles.notiDesc, item.isRead && styles.textDimmed]} numberOfLines={2}>
-                    {item.desc}
-                  </Text>
-                </View>
-
-                {/* Right side status */}
-                <div style={styles.rightStatus as any}>
-                  {!item.isRead ? (
-                    <View style={styles.greenDot} />
-                  ) : (
-                    <MaterialIcons name="chevron-right" size={20} color="#cbd5e1" />
-                  )}
-                </div>
-              </View>
-            </Pressable>
-          ))
+          )}
+        </View>
+        {unreadCount > 0 && (
+          <Pressable onPress={handleMarkAllAsRead} style={styles.markAllButton}>
+            <MaterialIcons name="done-all" size={20} color={COLORS.primary} />
+          </Pressable>
         )}
-        <View style={{ height: 100 }} />
-      </ScrollView>
+      </View>
 
-      {/* --- NAVIGATION --- */}
-      <BottomNav activePage="alerts" />
+      {notifications.length === 0 ? (
+        <View style={styles.emptyContainer}>
+          <MaterialIcons name="notifications-none" size={64} color={COLORS.textSub} />
+          <Text style={styles.emptyTitle}>No Notifications Yet</Text>
+          <Text style={styles.emptyDesc}>
+            You'll get updates here when organizations make changes to your reported dogs.
+          </Text>
+        </View>
+      ) : (
+        <FlatList
+          data={notifications}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.listContent}
+          renderItem={({ item }) => (
+            <Pressable
+              style={[
+                styles.notificationCard,
+                !item.isRead && styles.unreadCard
+              ]}
+              onPress={() => handleNotificationPress(item)}
+            >
+              {/* Left Icon */}
+              <View
+                style={[
+                  styles.iconContainer,
+                  !item.isRead && { backgroundColor: 'rgba(55, 236, 19, 0.2)' }
+                ]}
+              >
+                <MaterialIcons
+                  name={getNotificationIcon(item.type)}
+                  size={24}
+                  color={!item.isRead ? COLORS.primary : COLORS.textSub}
+                />
+              </View>
+
+              {/* Content */}
+              <View style={styles.contentContainer}>
+                <View style={styles.titleRow}>
+                  <Text style={[styles.notificationTitle, !item.isRead && styles.unreadTitle]}>
+                    {item.title}
+                  </Text>
+                  {!item.isRead && <View style={styles.unreadDot} />}
+                </View>
+
+                <Text style={styles.notificationDesc} numberOfLines={2}>
+                  {item.desc}
+                </Text>
+
+                {/* Dog Details */}
+                <View style={styles.detailsRow}>
+                  <View style={styles.detailTag}>
+                    <MaterialIcons name="pets" size={14} color={COLORS.primary} />
+                    <Text style={styles.detailText}>{item.dogName}</Text>
+                  </View>
+                  <View style={styles.detailTag}>
+                    <Text style={styles.detailText}>{item.breed}</Text>
+                  </View>
+                  {item.newStatus && (
+                    <View
+                      style={[
+                        styles.statusTag,
+                        { backgroundColor: getStatusColor(item.newStatus) + '20' }
+                      ]}
+                    >
+                      <Text style={[styles.statusText, { color: getStatusColor(item.newStatus) }]}>
+                        {item.newStatus}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+
+                {/* Timestamp */}
+                <Text style={styles.timestamp}>
+                  {item.createdAt && getTimeAgo((item.createdAt as any).seconds)}
+                </Text>
+              </View>
+
+              {/* Right Arrow */}
+              <MaterialIcons name="chevron-right" size={24} color={COLORS.textSub} />
+            </Pressable>
+          )}
+          scrollEnabled
+          showsVerticalScrollIndicator={false}
+        />
+      )}
     </SafeAreaView>
   );
 }
 
-// --- HELPERS ---
-
-/**
- * Maps the notification type string to a MaterialCommunityIcons name
- * Matches the 'type' field in the Notification interface
- */
-const getIconName = (type: string): any => {
-  switch (type) {
-    case 'pets': 
-      return 'paw';
-    case 'campaign': 
-      return 'bullhorn';
-    case 'chat_bubble': 
-      return 'message-text';
-    case 'check_circle': 
-      return 'check-circle';
-    case 'assignment_turned_in': 
-      return 'clipboard-check';
-    case 'warning': 
-      return 'alert-circle';
-    case 'assignment_ind': 
-      return 'account-details';
-    case 'bar_chart': 
-      return 'chart-bar';
-    default: 
-      return 'bell'; // Fallback icon
-  }
-};
-
-/**
- * Maps the notification type to a specific branding color
- */
-const getIconColor = (type: string): string => {
-  switch (type) {
-    case 'check_circle': 
-      return '#059669'; // Emerald-600
-    case 'chat_bubble': 
-      return '#3b82f6'; // Blue-500
-    case 'pets': 
-      return '#f97316'; // Orange-500
-    case 'campaign': 
-      return '#8b5cf6'; // Violet-500
-    case 'warning': 
-      return '#ef4444'; // Red-500
-    case 'assignment_turned_in':
-    case 'assignment_ind':
-      return '#0ea5e9'; // Sky-500
-    default: 
-      return '#37ec13'; // StrayMandu Primary Green
-  }
-};
-
-/**
- * Formats Firestore timestamps into human-readable relative time
- * @param seconds - The seconds field from the Firestore Timestamp
- */
-const formatTime = (seconds: number): string => {
+// Helper function to format time
+const getTimeAgo = (seconds: number): string => {
+  if (!seconds) return 'Just now';
   const now = Math.floor(Date.now() / 1000);
   const diff = now - seconds;
 
   if (diff < 60) return 'Just now';
-  
-  const minutes = Math.floor(diff / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  
-  const days = Math.floor(hours / 24);
-  if (days < 7) return `${days}d ago`;
-  
-  // Fallback for older notifications
-  return new Date(seconds * 1000).toLocaleDateString();
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  if (diff < 604800) return `${Math.floor(diff / 86400)}d ago`;
+  return `${Math.floor(diff / 604800)}w ago`;
 };
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: DESIGN.white },
-  headerContainer: { paddingHorizontal: 16, paddingTop: 10, backgroundColor: DESIGN.white },
-  headerTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', height: 48 },
-  backBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#f8fafc', justifyContent: 'center', alignItems: 'center', marginLeft: -8 },
-  markAllText: { color: '#047857', fontWeight: '800', fontSize: 14 },
-  pageTitle: { fontSize: 28, fontWeight: '900', color: DESIGN.textMain, marginTop: 8 },
-  
-  filterBar: { borderBottomWidth: 1, borderBottomColor: DESIGN.border, paddingBottom: 16, marginTop: 15 },
-  filterScroll: { paddingHorizontal: 16, gap: 10 },
-  chip: { height: 38, paddingHorizontal: 20, borderRadius: 19, backgroundColor: '#f1f5f9', justifyContent: 'center' },
-  chipActive: { backgroundColor: DESIGN.primary },
-  chipText: { fontSize: 14, fontWeight: '600', color: '#64748b' },
-  chipTextActive: { color: '#000', fontWeight: '800' },
-
-  listContent: { flexGrow: 1 },
-  notiItem: { paddingHorizontal: 16, paddingVertical: 18, borderBottomWidth: 1, borderBottomColor: DESIGN.border, position: 'relative' },
-  notiUnread: { backgroundColor: '#37ec1305' },
-  unreadIndicator: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 4, backgroundColor: DESIGN.primary, borderTopRightRadius: 4, borderBottomRightRadius: 4 },
-  notiMainRow: { flexDirection: 'row', alignItems: 'flex-start' },
-  iconContainer: { width: 48, height: 48, borderRadius: 24, justifyContent: 'center', alignItems: 'center' },
-  textWrapper: { flex: 1, marginLeft: 16 },
-  textTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 4 },
-  notiTitle: { fontSize: 16, fontWeight: '800', color: DESIGN.textMain, flex: 1 },
-  notiTime: { fontSize: 12, color: '#94a3b8', fontWeight: '500' },
-  notiDesc: { fontSize: 14, color: '#475569', lineHeight: 20, fontWeight: '500' },
-  textDimmed: { opacity: 0.6, fontWeight: '500' },
-  rightStatus: { marginLeft: 10, height: 48, justifyContent: 'center' },
-  greenDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: DESIGN.primary },
-
-  center: { marginTop: 100, alignItems: 'center' },
-  emptyState: { alignItems: 'center', paddingVertical: 100, paddingHorizontal: 40 },
-  emptyIconCircle: { width: 120, height: 120, borderRadius: 60, backgroundColor: '#f8fafc', justifyContent: 'center', alignItems: 'center', marginBottom: 20 },
-  emptyTitle: { fontSize: 18, fontWeight: '800', color: DESIGN.textMain },
-  emptySub: { fontSize: 14, color: DESIGN.textSub, textAlign: 'center', marginTop: 8 },
+  safeArea: {
+    flex: 1,
+    backgroundColor: COLORS.backgroundLight,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: COLORS.white,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  headerTitleContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    justifyContent: 'center',
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: COLORS.textMain,
+  },
+  unreadBadge: {
+    backgroundColor: COLORS.primary,
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    minWidth: 24,
+    alignItems: 'center',
+  },
+  unreadBadgeText: {
+    color: COLORS.textMain,
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  iconButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: COLORS.backgroundLight,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  markAllButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: COLORS.backgroundLight,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  listContent: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  notificationCard: {
+    flexDirection: 'row',
+    backgroundColor: COLORS.white,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 8,
+    alignItems: 'flex-start',
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  unreadCard: {
+    backgroundColor: COLORS.unread,
+    borderColor: '#FCD34D',
+  },
+  iconContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: COLORS.backgroundLight,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  contentContainer: {
+    flex: 1,
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 4,
+  },
+  notificationTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: COLORS.textMain,
+    flex: 1,
+  },
+  unreadTitle: {
+    fontWeight: '800',
+  },
+  unreadDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: COLORS.primary,
+  },
+  notificationDesc: {
+    fontSize: 13,
+    color: COLORS.textSub,
+    marginBottom: 8,
+    lineHeight: 18,
+  },
+  detailsRow: {
+    flexDirection: 'row',
+    gap: 6,
+    marginBottom: 8,
+    flexWrap: 'wrap',
+  },
+  detailTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: COLORS.backgroundLight,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  detailText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: COLORS.textMain,
+  },
+  statusTag: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  statusText: {
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'capitalize',
+  },
+  timestamp: {
+    fontSize: 10,
+    color: COLORS.textSub,
+    fontWeight: '500',
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 32,
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: COLORS.textMain,
+    marginTop: 16,
+    textAlign: 'center',
+  },
+  emptyDesc: {
+    fontSize: 14,
+    color: COLORS.textSub,
+    marginTop: 8,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
 });
