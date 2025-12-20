@@ -138,7 +138,7 @@ export default function OrgHome() {
             <Text style={styles.headerTitle}>{orgName} 🏠</Text>
           </View>
         </View>
-        <Pressable style={styles.iconButton} onPress={() => router.push('/notifications')}>
+        <Pressable style={styles.iconButton} onPress={() => router.push('/OrgNotification')}>
           <MaterialIcons name="notifications-active" size={24} color={COLORS.textMain} />
         </Pressable>
       </View>
