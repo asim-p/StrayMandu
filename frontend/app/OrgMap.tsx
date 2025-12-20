@@ -17,7 +17,7 @@ import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
-import BottomNav from '../src/components/BottomNav'; 
+import OrgBottom from '../src/components/OrgBottom'; 
 
 // Firebase Imports
 import { collection, getDocs } from 'firebase/firestore';
@@ -276,7 +276,7 @@ export default function MapScreen() {
         </View>
       )}
 
-      <BottomNav activePage="map" />
+      <OrgBottom activePage="map" />
     </View>
   );
 }
