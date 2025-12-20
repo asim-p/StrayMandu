@@ -32,50 +32,24 @@ const COLORS = {
   systemText: '#2563eb',
 };
 
-const CATEGORIES = ['All', 'Reports', 'Urgent', 'System'];
-
 export default function OrgNotification() {
   const router = useRouter();
   const { user } = useAuth();
 
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('All');
 
   // --- REAL-TIME DATA FETCH ---
   useEffect(() => {
     if (!user?.uid) return;
 
-    const unsubscribe = notificationService.subscribe(user.uid, (data) => {
+    const unsubscribe = notificationService.subscribeToNotifications(user.uid, (data) => {
       setNotifications(data);
       setLoading(false);
     });
 
     return () => unsubscribe();
   }, [user]);
-
-  // --- GROUPING LOGIC ---
-  const groupNotifications = (notis: Notification[]) => {
-    const today = new Date().setHours(0, 0, 0, 0);
-    const yesterday = new Date(today - 86400000).setHours(0, 0, 0, 0);
-
-    const filtered = notis.filter((n) => {
-      if (activeTab === 'All') return true;
-      if (activeTab === 'Urgent') return n.type === 'check_circle' || n.title.toLowerCase().includes('urgent');
-      return n.category === activeTab;
-    });
-
-    return {
-      Today: filtered.filter(n => n.createdAt?.toDate().getTime() >= today),
-      Yesterday: filtered.filter(n => {
-        const time = n.createdAt?.toDate().getTime();
-        return time < today && time >= yesterday;
-      }),
-      Earlier: filtered.filter(n => n.createdAt?.toDate().getTime() < yesterday),
-    };
-  };
-
-  const groups = groupNotifications(notifications);
 
   // --- RENDER NOTIFICATION ITEM ---
   const renderItem = (item: Notification) => {
@@ -123,23 +97,8 @@ export default function OrgNotification() {
           <Pressable onPress={() => router.back()} style={styles.backBtn}>
             <MaterialIcons name="arrow-back" size={24} color={COLORS.textMain} />
           </Pressable>
-          <Pressable onPress={() => notificationService.markAllAsRead(notifications)}>
-            <Text style={styles.markAll}>Mark all read</Text>
-          </Pressable>
         </View>
         <Text style={styles.pageTitle}>Notifications</Text>
-
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabScroll}>
-          {CATEGORIES.map(cat => (
-            <Pressable 
-              key={cat} 
-              onPress={() => setActiveTab(cat)}
-              style={[styles.tab, activeTab === cat && styles.tabActive]}
-            >
-              <Text style={[styles.tabText, activeTab === cat && styles.tabTextActive]}>{cat}</Text>
-            </Pressable>
-          ))}
-        </ScrollView>
       </View>
 
       {/* --- LIST --- */}
@@ -152,17 +111,7 @@ export default function OrgNotification() {
             <Text style={styles.emptyText}>No notifications yet</Text>
           </View>
         ) : (
-          <>
-            {groups.Today.length > 0 && (
-              <Section title="Today" items={groups.Today} render={renderItem} />
-            )}
-            {groups.Yesterday.length > 0 && (
-              <Section title="Yesterday" items={groups.Yesterday} render={renderItem} />
-            )}
-            {groups.Earlier.length > 0 && (
-              <Section title="Earlier" items={groups.Earlier} render={renderItem} />
-            )}
-          </>
+          notifications.map((item: Notification) => renderItem(item))
         )}
         <View style={{ height: 100 }} />
       </ScrollView>
@@ -171,14 +120,6 @@ export default function OrgNotification() {
     </SafeAreaView>
   );
 }
-
-// --- SUB-COMPONENTS ---
-const Section = ({ title, items, render }: any) => (
-  <View style={styles.section}>
-    <Text style={styles.sectionTitle}>{title.toUpperCase()}</Text>
-    {items.map((item: any) => render(item))}
-  </View>
-);
 
 // --- HELPER ---
 const formatTime = (date: Date) => {
@@ -190,20 +131,13 @@ const formatTime = (date: Date) => {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.backgroundLight },
-  header: { backgroundColor: COLORS.white, paddingHorizontal: 20, paddingTop: 10, borderBottomWidth: 1, borderBottomColor: COLORS.border },
+  header: { backgroundColor: COLORS.white, paddingHorizontal: 20, paddingTop: 10, paddingBottom: 15, borderBottomWidth: 1, borderBottomColor: COLORS.border },
   topRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   backBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#f8fafc', alignItems: 'center', justifyContent: 'center' },
   markAll: { color: '#059669', fontWeight: 'bold', fontSize: 14 },
   pageTitle: { fontSize: 28, fontWeight: '900', color: COLORS.textMain, marginTop: 10 },
-  tabScroll: { marginTop: 15, marginBottom: 15 },
-  tab: { paddingHorizontal: 20, paddingVertical: 8, borderRadius: 20, backgroundColor: COLORS.white, borderWidth: 1, borderColor: '#e2e8f0', marginRight: 10 },
-  tabActive: { backgroundColor: COLORS.textMain, borderColor: COLORS.textMain },
-  tabText: { fontSize: 13, fontWeight: '600', color: COLORS.textSub },
-  tabTextActive: { color: COLORS.white },
   
   listBody: { paddingHorizontal: 16, paddingTop: 20 },
-  section: { marginBottom: 25 },
-  sectionTitle: { fontSize: 12, fontWeight: '800', color: '#94a3b8', marginBottom: 12, letterSpacing: 1 },
   
   notiCard: { flexDirection: 'row', backgroundColor: COLORS.white, padding: 15, borderRadius: 16, marginBottom: 10, alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.03, shadowRadius: 10, elevation: 2 },
   unreadCard: { borderWidth: 1, borderColor: COLORS.primary + '30' },

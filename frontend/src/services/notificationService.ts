@@ -1,4 +1,4 @@
-// frontend/src/services/notificationService.ts
+import { db } from '../config/firebase';
 import { 
   collection, 
   addDoc, 
@@ -6,28 +6,57 @@ import {
   where, 
   orderBy, 
   onSnapshot, 
-  updateDoc, 
-  doc, 
-  writeBatch,
   serverTimestamp,
-  Timestamp 
+  updateDoc,
+  doc,
+  writeBatch
 } from 'firebase/firestore';
-import { db } from '../config/firebase';
 
 export interface Notification {
   id: string;
-  userId: string;
+  userId: string; // The user who receives the notification
   title: string;
   desc: string;
-  type: 'pets' | 'campaign' | 'chat_bubble' | 'check_circle' | 'assignment_turned_in' | 'warning' | 'assignment_ind' | 'bar_chart';
-  category: 'Reports' | 'Adoptions' | 'Announcements' | 'Urgent' | 'System';
+  type: 'assignment_turned_in' | 'warning' | 'check_circle' | 'info';
   isRead: boolean;
-  createdAt: Timestamp; 
+  createdAt: any;
+  
+  // Context Data
+  reportId: string;
+  dogName: string;
+  breed: string;
+  newStatus?: string;
+  orgName?: string;
 }
 
 export const notificationService = {
-  // Changed name to subscribeToNotifications to match your UI component
-  subscribeToNotifications: (userId: string, callback: (notis: Notification[]) => void) => {
+  
+  // 1. Send a Notification (Used by OrgDetailViews)
+  async sendNotification(
+    recipientId: string, 
+    title: string, 
+    desc: string, 
+    type: Notification['type'],
+    contextData: { reportId: string, dogName: string, breed: string, newStatus?: string, orgName?: string }
+  ) {
+    try {
+      await addDoc(collection(db, 'notifications'), {
+        userId: recipientId,
+        title,
+        desc,
+        type,
+        isRead: false,
+        createdAt: serverTimestamp(),
+        ...contextData
+      });
+      console.log("Notification sent successfully");
+    } catch (error) {
+      console.error("Error sending notification:", error);
+    }
+  },
+
+  // 2. Subscribe to Notifications (Used by UserNotification.tsx)
+  subscribeToNotifications(userId: string, callback: (notis: Notification[]) => void) {
     const q = query(
       collection(db, 'notifications'),
       where('userId', '==', userId),
@@ -35,28 +64,29 @@ export const notificationService = {
     );
 
     return onSnapshot(q, (snapshot) => {
-      const notis = snapshot.docs.map(doc => ({
+      const notifications = snapshot.docs.map(doc => ({
         id: doc.id,
-        ...doc.data(),
-      })) as Notification[];
-      callback(notis);
+        ...doc.data()
+      } as Notification));
+      callback(notifications);
     });
   },
 
-  markAllAsRead: async (notifications: Notification[]) => {
-    const unread = notifications.filter(n => !n.isRead);
-    if (unread.length === 0) return;
-
-    const batch = writeBatch(db);
-    unread.forEach(n => {
-      const ref = doc(db, 'notifications', n.id);
-      batch.update(ref, { isRead: true });
-    });
-    return await batch.commit();
-  },
-
-  markAsRead: async (notificationId: string) => {
+  // 3. Mark Single as Read
+  async markAsRead(notificationId: string) {
     const ref = doc(db, 'notifications', notificationId);
-    return await updateDoc(ref, { isRead: true });
+    await updateDoc(ref, { isRead: true });
+  },
+
+  // 4. Mark All as Read
+  async markAllAsRead(notifications: Notification[]) {
+    const batch = writeBatch(db);
+    notifications.forEach(notif => {
+      if (!notif.isRead) {
+        const ref = doc(db, 'notifications', notif.id);
+        batch.update(ref, { isRead: true });
+      }
+    });
+    await batch.commit();
   }
 };
