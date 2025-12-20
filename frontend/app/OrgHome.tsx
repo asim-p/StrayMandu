@@ -59,13 +59,28 @@ export default function OrgHome() {
     const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
       if (user && mounted) {
         try {
-          const orgDoc = await getDoc(doc(db, "users", user.uid));
-          if (orgDoc.exists()) {
-            const data = orgDoc.data();
-            setOrgName(data.organizationName || data.name || 'StrayMandu HQ');
+          // --- FIXED LOGIC: CHECK BOTH COLLECTIONS ---
+          
+          // 1. First, try the 'organizations' collection
+          let docRef = doc(db, "organizations", user.uid);
+          let docSnap = await getDoc(docRef);
+
+          // 2. If not found there, try 'users' collection
+          if (!docSnap.exists()) {
+            docRef = doc(db, "users", user.uid);
+            docSnap = await getDoc(docRef);
+          }
+
+          // 3. Set the data if found
+          if (docSnap.exists()) {
+            const data = docSnap.data();
+            // Check multiple potential field names for the Organization Name
+            setOrgName(data.organizationName || data.orgName || data.name || 'StrayMandu HQ');
             setProfilePhoto(data.photoURL || user.photoURL);
           }
-        } catch (error) { console.log("Error fetching org data:", error); }
+        } catch (error) { 
+          console.log("Error fetching org data:", error); 
+        }
       }
     });
 

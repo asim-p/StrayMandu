@@ -10,15 +10,22 @@ import {
   StatusBar,
   Image,
   Dimensions,
-  ActivityIndicator
+  ActivityIndicator,
+  Alert
 } from 'react-native';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import BottomNav from '../src/components/BottomNav'; 
+import * as ImagePicker from 'expo-image-picker'; // Added Image Picker
+
+// --- COMPONENTS ---
+import OrgBottomNav from '../src/components/OrgBottom'; 
+
+// --- SERVICES ---
+import { uploadToCloudinary } from '../src/services/cloudinaryService'; // Added Cloudinary Service
 
 // --- FIREBASE IMPORTS ---
 import { auth, db } from '../src/config/firebase'; 
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, updateDoc } from 'firebase/firestore'; // Added updateDoc
 import { onAuthStateChanged } from 'firebase/auth';
 
 const { width } = Dimensions.get('window');
@@ -40,25 +47,91 @@ const COLORS = {
 export default function OrgProfile() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
+  const [uploadingImage, setUploadingImage] = useState(false); // UI State for upload
   const [orgData, setOrgData] = useState<any>(null);
+  const [collectionName, setCollectionName] = useState('organizations'); // Track where data came from
 
   useEffect(() => {
+    let mounted = true;
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (user) {
+      if (user && mounted) {
         try {
-          const orgDoc = await getDoc(doc(db, "users", user.uid));
-          if (orgDoc.exists()) {
-            setOrgData(orgDoc.data());
+          // 1. Try 'organizations' collection first
+          let docRef = doc(db, "organizations", user.uid);
+          let docSnap = await getDoc(docRef);
+          let foundCollection = "organizations";
+
+          // 2. If not found, try 'users' collection
+          if (!docSnap.exists()) {
+            docRef = doc(db, "users", user.uid);
+            docSnap = await getDoc(docRef);
+            foundCollection = "users";
+          }
+
+          if (docSnap.exists()) {
+            setOrgData(docSnap.data());
+            setCollectionName(foundCollection);
           }
         } catch (error) {
           console.error("Error fetching org profile:", error);
         } finally {
-          setLoading(false);
+          if (mounted) setLoading(false);
         }
       }
     });
-    return () => unsubscribe();
+    return () => {
+      mounted = false;
+      unsubscribe();
+    };
   }, []);
+
+  // --- IMAGE UPLOAD LOGIC ---
+  const handleUpdateProfilePicture = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission Denied', 'We need access to your gallery to change your photo.');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.5,
+    });
+
+    if (!result.canceled) {
+      const localUri = result.assets[0].uri;
+      uploadAndSaveImage(localUri);
+    }
+  };
+
+  const uploadAndSaveImage = async (uri: string) => {
+    const user = auth.currentUser;
+    if (!user) return;
+    
+    setUploadingImage(true);
+    try {
+      // 1. Upload to Cloudinary
+      const cloudinaryUrl = await uploadToCloudinary(uri);
+      
+      // 2. Update Firestore (using the collection we found earlier)
+      const orgRef = doc(db, collectionName, user.uid);
+      await updateDoc(orgRef, {
+        photoURL: cloudinaryUrl
+      });
+
+      // 3. Update Local State immediately
+      setOrgData((prev: any) => ({ ...prev, photoURL: cloudinaryUrl }));
+      
+      Alert.alert("Success", "Profile picture updated!");
+    } catch (error) {
+      console.error(error);
+      Alert.alert("Error", "Failed to upload image. Please check your connection.");
+    } finally {
+      setUploadingImage(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -67,6 +140,33 @@ export default function OrgProfile() {
       </View>
     );
   }
+
+  // --- SAFE DATA MAPPING ---
+  const displayName = orgData?.organizationName || orgData?.name || 'Organization Name';
+  const displayAddress = typeof orgData?.address === 'string' 
+    ? orgData.address 
+    : 'Kathmandu Valley, Nepal'; 
+  
+  const totalRescues = orgData?.totalRescues ?? 0;
+  const monthlyRescues = orgData?.monthlyRescues ?? 0;
+  const volunteerCount = orgData?.numberOfVolunteers ?? 0;
+  
+  // Logic: Show Spinner OR User Photo OR Default Photo
+  const renderAvatar = () => {
+    if (uploadingImage) {
+      return (
+        <View style={[styles.avatar, styles.loadingAvatar]}>
+          <ActivityIndicator color={COLORS.primary} size="large" />
+        </View>
+      );
+    }
+    return (
+      <Image
+        source={orgData?.photoURL ? { uri: orgData.photoURL } : require('../img/default.png')}
+        style={styles.avatar}
+      />
+    );
+  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -97,18 +197,27 @@ export default function OrgProfile() {
         {/* Profile Info */}
         <View style={styles.profileHero}>
           <View style={styles.avatarContainer}>
-            <Image
-              source={orgData?.photoURL ? { uri: orgData.photoURL } : require('../img/default.png')}
-              style={styles.avatar}
-            />
+            {renderAvatar()}
+            
+            {/* Verified Badge (Top Right) */}
             <View style={styles.verifiedBadge}>
               <MaterialIcons name="verified" size={14} color={COLORS.white} />
             </View>
+
+            {/* Camera Button (Bottom Right) */}
+            <Pressable 
+              style={styles.cameraBtn} 
+              onPress={handleUpdateProfilePicture}
+              disabled={uploadingImage}
+            >
+              <MaterialIcons name="photo-camera" size={16} color={COLORS.textMain} />
+            </Pressable>
           </View>
-          <Text style={styles.orgName}>{orgData?.name || 'StrayMandu HQ'}</Text>
+
+          <Text style={styles.orgName}>{displayName}</Text>
           <View style={styles.locationRow}>
             <MaterialIcons name="location-on" size={14} color={COLORS.textSub} />
-            <Text style={styles.locationText}>Kathmandu Valley, Nepal</Text>
+            <Text style={styles.locationText}>{displayAddress}</Text>
           </View>
           <View style={styles.ngoTag}>
             <Text style={styles.ngoTagText}>NGO VERIFIED</Text>
@@ -122,21 +231,21 @@ export default function OrgProfile() {
               <MaterialCommunityIcons name="paw" size={30} color={COLORS.primary} />
             </View>
             <Text style={styles.impactLabel}>LIFETIME IMPACT</Text>
-            <Text style={styles.impactNumber}>3,420</Text>
+            <Text style={styles.impactNumber}>{totalRescues.toLocaleString()}</Text>
             <Text style={styles.impactSubtext}>Total Rescues (All-Time)</Text>
             
             <View style={styles.divider} />
             
             <View style={styles.impactFooter}>
               <MaterialIcons name="trending-up" size={16} color={COLORS.primary} />
-              <Text style={styles.impactFooterText}>Consistent growth since 2021</Text>
+              <Text style={styles.impactFooterText}>Consistent growth since 2024</Text>
             </View>
           </View>
         </View>
 
         {/* Stats Grid */}
         <View style={styles.statsGrid}>
-          {/* Rescues Card */}
+          {/* Rescues Card (Monthly) */}
           <View style={styles.statCard}>
             <View style={styles.statHeader}>
               <View style={[styles.statIconBox, { backgroundColor: '#eff6ff' }]}>
@@ -145,7 +254,7 @@ export default function OrgProfile() {
               <Text style={styles.percentageBadge}>+12%</Text>
             </View>
             <View>
-              <Text style={styles.statBigNumber}>128</Text>
+              <Text style={styles.statBigNumber}>{monthlyRescues}</Text>
               <Text style={styles.statLabel}>Rescues This Month</Text>
             </View>
           </View>
@@ -161,7 +270,7 @@ export default function OrgProfile() {
               </View>
             </View>
             <View>
-              <Text style={styles.statBigNumber}>15</Text>
+              <Text style={styles.statBigNumber}>5</Text> 
               <Text style={styles.statLabel}>Pending Reports</Text>
             </View>
           </View>
@@ -175,7 +284,7 @@ export default function OrgProfile() {
               <Text style={[styles.percentageBadge, { color: COLORS.purple, backgroundColor: '#f5f3ff' }]}>Live</Text>
             </View>
             <View>
-              <Text style={styles.statBigNumber}>05</Text>
+              <Text style={styles.statBigNumber}>2</Text>
               <Text style={styles.statLabel}>Active Operations</Text>
             </View>
           </View>
@@ -188,7 +297,7 @@ export default function OrgProfile() {
               </View>
             </View>
             <View>
-              <Text style={styles.statBigNumber}>24</Text>
+              <Text style={styles.statBigNumber}>{volunteerCount}</Text>
               <Text style={styles.statLabel}>Volunteers Online</Text>
             </View>
           </View>
@@ -238,7 +347,8 @@ export default function OrgProfile() {
         </ScrollView>
       </ScrollView>
 
-      <BottomNav activePage="profile" />
+      {/* UPDATED: Using Organization Bottom Nav */}
+      <OrgBottomNav activePage="profile" />
     </SafeAreaView>
   );
 }
@@ -266,11 +376,31 @@ const styles = StyleSheet.create({
   profileHero: { alignItems: 'center', paddingVertical: 24 },
   avatarContainer: { position: 'relative', marginBottom: 12 },
   avatar: { width: 96, height: 96, borderRadius: 48, borderWidth: 4, borderColor: COLORS.white },
+  loadingAvatar: { justifyContent: 'center', alignItems: 'center', backgroundColor: '#e5e7eb' },
+  
+  // Badge Styles
   verifiedBadge: { 
-    position: 'absolute', bottom: 4, right: 4, 
-    backgroundColor: '#3b82f6', borderRadius: 12, padding: 4, 
-    borderWidth: 2, borderColor: COLORS.white 
+    position: 'absolute', 
+    top: 0, 
+    right: 0, 
+    backgroundColor: '#3b82f6', 
+    borderRadius: 12, 
+    padding: 4, 
+    borderWidth: 2, 
+    borderColor: COLORS.white 
   },
+  cameraBtn: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    backgroundColor: COLORS.primary,
+    padding: 8,
+    borderRadius: 20,
+    borderWidth: 2,
+    borderColor: COLORS.white,
+    elevation: 3,
+  },
+
   orgName: { fontSize: 24, fontWeight: '900', color: COLORS.textMain, marginBottom: 4 },
   locationRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 12 },
   locationText: { fontSize: 14, color: COLORS.textSub, fontWeight: '600' },
@@ -288,7 +418,7 @@ const styles = StyleSheet.create({
   impactLabel: { color: COLORS.primary, fontSize: 10, fontWeight: '800', letterSpacing: 1.5, marginBottom: 4 },
   impactNumber: { color: COLORS.white, fontSize: 48, fontWeight: '900', marginBottom: 4 },
   impactSubtext: { color: '#cbd5e1', fontSize: 14, fontWeight: '500' },
-  divider: { width: '100%', height: 1, backgroundColor: 'rgba(255,255,255,0.1)', my: 16, marginVertical: 16 },
+  divider: { width: '100%', height: 1, backgroundColor: 'rgba(255,255,255,0.1)', marginVertical: 16 },
   impactFooter: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   impactFooterText: { color: '#94a3b8', fontSize: 12, fontWeight: '600' },
 
