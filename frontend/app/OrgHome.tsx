@@ -15,11 +15,13 @@ import {
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import * as Location from 'expo-location';
-import BottomNav from '../src/components/BottomNav'; 
+
+// --- FIXED IMPORT PATH (Make sure this filename matches your file exactly) ---
+import OrgBottomNav from '../src/components/OrgBottom'; 
 
 // --- FIREBASE IMPORTS ---
 import { auth, db } from '../src/config/firebase'; 
-import { doc, getDoc, collection, query, where, getDocs, limit, orderBy } from 'firebase/firestore';
+import { doc, getDoc, collection, query, where, getDocs, limit } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
 
 const { width } = Dimensions.get('window');
@@ -29,7 +31,7 @@ const COLORS = {
   primary: '#37ec13',
   primaryDark: '#2ab80e',
   backgroundLight: '#f6f8f6',
-  surfaceDark: '#1a2c15', // Dark green from HTML
+  surfaceDark: '#1a2c15', 
   textMain: '#121811',
   textSub: '#5c6f57',
   white: '#FFFFFF',
@@ -41,7 +43,6 @@ const COLORS = {
 export default function OrgHome() {
   const router = useRouter();
   
-  // States
   const [orgName, setOrgName] = useState('StrayMandu HQ');
   const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
   const [currentAddress, setCurrentAddress] = useState('Locating HQ...');
@@ -51,46 +52,37 @@ export default function OrgHome() {
   useEffect(() => {
     let mounted = true;
 
-    // 1. Fetch Organization Auth & Profile
     const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
       if (user && mounted) {
         try {
-          const orgDoc = await getDoc(doc(db, "users", user.uid)); // Or "organizations" collection
+          const orgDoc = await getDoc(doc(db, "users", user.uid));
           if (orgDoc.exists()) {
             const data = orgDoc.data();
             setOrgName(data.name || 'StrayMandu HQ');
             setProfilePhoto(data.photoURL || user.photoURL);
           }
-        } catch (error) {
-          console.log("Error fetching org data:", error);
-        }
+        } catch (error) { console.log("Error fetching org data:", error); }
       }
     });
 
-    // 2. Location Logic (Same as Home.tsx)
     (async () => {
       try {
         let { status } = await Location.requestForegroundPermissionsAsync();
-        if (status !== 'granted') {
-          if (mounted) setCurrentAddress('Permission Denied');
-          return;
+        if (status === 'granted') {
+          let location = await Location.getCurrentPositionAsync({});
+          let address = await Location.reverseGeocodeAsync({
+            latitude: location.coords.latitude,
+            longitude: location.coords.longitude
+          });
+          if (mounted && address.length > 0) {
+            const area = address[0].district || address[0].street || address[0].city;
+            const city = address[0].city || address[0].region;
+            setCurrentAddress(`${area}, ${city}`);
+          }
         }
-        let location = await Location.getCurrentPositionAsync({});
-        let address = await Location.reverseGeocodeAsync({
-          latitude: location.coords.latitude,
-          longitude: location.coords.longitude
-        });
-        if (mounted && address.length > 0) {
-          const area = address[0].district || address[0].street || address[0].city;
-          const city = address[0].city || address[0].region;
-          setCurrentAddress(`${area}, ${city}`);
-        }
-      } catch (error) {
-        if (mounted) setCurrentAddress('Kathmandu, Nepal');
-      }
+      } catch (error) { if (mounted) setCurrentAddress('Kathmandu, Nepal'); }
     })();
 
-    // 3. Fetch Pending Reports for Review
     const fetchPending = async () => {
       try {
         const q = query(
@@ -100,37 +92,28 @@ export default function OrgHome() {
         );
         const querySnapshot = await getDocs(q);
         const reports = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        
         if (mounted) {
           setUnassignedReports(reports);
           setLoading(false);
         }
       } catch (error) {
-        console.error("Error fetching reports:", error);
         if (mounted) setLoading(false);
       }
     };
 
     fetchPending();
-
-    return () => { 
-      mounted = false; 
-      unsubscribeAuth();
-    };
+    return () => { mounted = false; unsubscribeAuth(); };
   }, []);
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" backgroundColor={COLORS.white} />
 
-      {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
-          <Pressable style={styles.avatarContainer} onPress={() => router.push('/profile')}>
-            <Image
-              source={profilePhoto ? { uri: profilePhoto } : DEFAULT_IMAGE}
-              style={styles.avatar}
-            />
+          <Pressable style={styles.avatarContainer} onPress={() => router.push('/OrgProfile')}>
+            <Image source={profilePhoto ? { uri: profilePhoto } : DEFAULT_IMAGE} style={styles.avatar} />
+            {/* FIXED: Replaced <div> with <View> */}
             <View style={styles.onlineBadge} />
           </Pressable>
           <View>
@@ -143,12 +126,9 @@ export default function OrgHome() {
         </Pressable>
       </View>
 
-      <ScrollView 
-        showsVerticalScrollIndicator={false} 
-        contentContainerStyle={styles.scrollContent}
-      >
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         
-        {/* Operations Center Card (Hero Section) */}
+        {/* Operations Center */}
         <View style={styles.sectionContainer}>
           <View style={styles.opsCard}>
             <View style={styles.opsHeader}>
@@ -157,6 +137,7 @@ export default function OrgHome() {
                 <Text style={styles.opsTitle}>Operations Center</Text>
               </View>
               <View style={styles.systemBadge}>
+                {/* FIXED: Replaced <div> with <View> */}
                 <View style={styles.pulseDot} />
                 <Text style={styles.systemBadgeText}>System Live</Text>
               </View>
@@ -171,7 +152,6 @@ export default function OrgHome() {
                 <Text style={styles.statNumber}>{unassignedReports.length.toString().padStart(2, '0')}</Text>
                 <Text style={styles.statLabel}>Unassigned</Text>
               </View>
-
               <View style={styles.statBox}>
                 <View style={styles.statIconRow}>
                   <MaterialIcons name="medical-services" size={20} color={COLORS.primary} />
@@ -188,12 +168,10 @@ export default function OrgHome() {
           </View>
         </View>
 
-        {/* Needing Review Horizontal List */}
+        {/* Needing Review */}
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>
-            Needing Review <Text style={styles.urgentTag}>Urgent</Text>
-          </Text>
-          <Pressable style={styles.viewAllBtn} onPress={() => router.push('/all-reports')}>
+          <Text style={styles.sectionTitle}>Needing Review <Text style={styles.urgentTag}>Urgent</Text></Text>
+          <Pressable style={styles.viewAllBtn} onPress={() => router.push('/reports-queue')}>
             <Text style={styles.viewAllText}>View All</Text>
             <MaterialIcons name="chevron-right" size={16} color={COLORS.primary} />
           </Pressable>
@@ -202,39 +180,24 @@ export default function OrgHome() {
         {loading ? (
           <ActivityIndicator size="large" color={COLORS.primary} style={{ marginTop: 20 }} />
         ) : (
-          <ScrollView 
-            horizontal 
-            showsHorizontalScrollIndicator={false} 
-            snapToInterval={276} 
-            decelerationRate="fast" 
-            contentContainerStyle={{ paddingLeft: 16, paddingRight: 8 }}
-          >
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingLeft: 16, paddingRight: 8 }}>
             {unassignedReports.map((report) => (
               <View key={report.id} style={styles.reportCard}>
-                <ImageBackground 
-                  source={report.imageUrls ? { uri: report.imageUrls[0] } : DEFAULT_IMAGE} 
-                  style={styles.cardImage}
-                >
+                <ImageBackground source={report.imageUrls ? { uri: report.imageUrls[0] } : DEFAULT_IMAGE} style={styles.cardImage}>
                   <View style={styles.criticalBadge}>
-                    <MaterialIcons name="warning" size={10} color="#FFF" />
-                    <Text style={styles.criticalText}>CRITICAL</Text>
+                    <Text style={styles.criticalText}>PENDING</Text>
                   </View>
                 </ImageBackground>
                 <View style={styles.cardContent}>
-                  <Text style={styles.cardTitle} numberOfLines={1}>{report.breed || report.name || 'Injured Stray'}</Text>
+                  <Text style={styles.cardTitle} numberOfLines={1}>{report.breed || 'Injured Stray'}</Text>
                   <Text style={styles.cardLoc} numberOfLines={1}>
-                    <MaterialIcons name="location-on" size={12} color={COLORS.textSub} /> {report.address || 'Unknown Location'}
+                    <MaterialIcons name="location-on" size={12} color={COLORS.textSub} /> {report.location?.address || 'Unknown Location'}
                   </Text>
                   <View style={styles.cardButtons}>
-                    <Pressable 
-                      style={styles.detailsBtn}
-                      onPress={() => router.push({ pathname: '/detailReports', params: { id: report.id } })}
-                    >
+                    <Pressable style={styles.detailsBtn} onPress={() => router.push({ pathname: '/detailReports', params: { id: report.id } })}>
                       <Text style={styles.btnText}>Details</Text>
                     </Pressable>
-                    <Pressable style={styles.assignBtn}>
-                      <Text style={[styles.btnText, {color: COLORS.textMain}]}>Assign</Text>
-                    </Pressable>
+                    <Pressable style={styles.assignBtn}><Text style={[styles.btnText, {color: COLORS.textMain}]}>Assign</Text></Pressable>
                   </View>
                 </View>
               </View>
@@ -242,7 +205,7 @@ export default function OrgHome() {
           </ScrollView>
         )}
 
-        {/* Active Operations (Matching Home.tsx Map Style) */}
+        {/* Active Map */}
         <View style={styles.sectionContainer}>
           <View style={styles.sectionHeaderNoPadding}>
             <Text style={styles.sectionTitle}>Active Operations</Text>
@@ -251,33 +214,19 @@ export default function OrgHome() {
                <View style={styles.miniBadgeGreen}><Text style={styles.miniBadgeTextGreen}>4 Fosters</Text></View>
             </View>
           </View>
-
           <View style={styles.mapCard}>
-            <ImageBackground
-              source={{ uri: 'https://lh3.googleusercontent.com/aida-public/AB6AXuA4PPr0HJOQ0mohRvRnwIeMxt_bdSQyY5utrgFeKXqoz98Z561u3yO38iw__VxOgEgJYCX0WvG6aCKrMeNGf5EwVlkIvjFct3Iz9kLmdQ7aotwz4FOma3lZB07AX3E6nPC9owyBLHuJEdg1AAmWPyB3a7Byt3UiT_jCBVUwuteaJ-AtHoS3PMeDxu_vKP7ixzm6wAVE7Hydbq6JiB9Rtwrx9ic7hAh2gqsZoQM7MnKm8jftMUFKi-ECvbrcwIndQOlJQft5IPfWjmc' }}
-              style={styles.mapImage}
-            >
+            <ImageBackground source={{ uri: 'https://maps.googleapis.com/maps/api/staticmap?center=27.7172,85.3240&zoom=13&size=600x300&key=YOUR_KEY' }} style={styles.mapImage}>
               <View style={styles.mapOverlay} />
-              
-              <View style={styles.mapPinContainer}>
-                <View style={styles.mapPin}>
-                  <MaterialCommunityIcons name="ambulance" size={18} color="#121811" />
-                </View>
-              </View>
-
+              <View style={styles.mapPinContainer}><View style={styles.mapPin}><MaterialCommunityIcons name="ambulance" size={18} color="#121811" /></View></View>
               <View style={styles.mapInfoCard}>
                 <View style={styles.mapInfoLeft}>
-                  <View style={styles.locationIconBg}>
-                    <MaterialIcons name="my-location" size={18} color={COLORS.primary} />
-                  </View>
+                  <View style={styles.locationIconBg}><MaterialIcons name="my-location" size={18} color={COLORS.primary} /></View>
                   <View>
                     <Text style={styles.mapInfoTitle}>Operational HQ</Text>
                     <Text style={styles.mapInfoSub}>{currentAddress}</Text>
                   </View>
                 </View>
-                <View style={styles.activeBadge}>
-                  <Text style={styles.activeBadgeText}>Live Coverage</Text>
-                </View>
+                <View style={styles.activeBadge}><Text style={styles.activeBadgeText}>Live Coverage</Text></View>
               </View>
             </ImageBackground>
           </View>
@@ -285,7 +234,8 @@ export default function OrgHome() {
 
       </ScrollView>
 
-      <BottomNav activePage="home" />
+      {/* --- INTEGRATED ORG BOTTOM NAV --- */}
+      <OrgBottomNav activePage="overview" />
     </SafeAreaView>
   );
 }
@@ -294,14 +244,9 @@ const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: COLORS.backgroundLight },
   scrollContent: { paddingBottom: 120 },
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: COLORS.white,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingHorizontal: 16, paddingVertical: 12, backgroundColor: COLORS.white,
+    borderBottomWidth: 1, borderBottomColor: '#F3F4F6',
   },
   headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   avatarContainer: { position: 'relative' },
@@ -317,16 +262,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center', alignItems: 'center',
   },
   sectionContainer: { paddingHorizontal: 16, marginTop: 16 },
-  opsCard: {
-    backgroundColor: COLORS.surfaceDark,
-    borderRadius: 24,
-    padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.2,
-    shadowRadius: 15,
-    elevation: 10,
-  },
+  opsCard: { backgroundColor: COLORS.surfaceDark, borderRadius: 24, padding: 20, elevation: 10 },
   opsHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 },
   opsLabel: { color: COLORS.primary, fontSize: 10, fontWeight: '800', letterSpacing: 1 },
   opsTitle: { color: COLORS.white, fontSize: 22, fontWeight: '800' },
@@ -350,28 +286,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8,
   },
   reviewButtonText: { fontWeight: '800', fontSize: 14, color: COLORS.textMain },
-  sectionHeader: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    paddingHorizontal: 16, marginTop: 24, marginBottom: 12,
-  },
-  sectionHeaderNoPadding: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    marginBottom: 12,
-  },
+  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, marginTop: 24, marginBottom: 12 },
+  sectionHeaderNoPadding: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
   sectionTitle: { fontSize: 18, fontWeight: '800', color: COLORS.textMain },
   urgentTag: { fontSize: 10, color: '#ef4444', backgroundColor: '#fee2e2', paddingHorizontal: 8, borderRadius: 10, overflow: 'hidden' },
   viewAllText: { fontSize: 14, fontWeight: '700', color: COLORS.primary },
   viewAllBtn: { flexDirection: 'row', alignItems: 'center' },
-  reportCard: {
-    width: 260, backgroundColor: COLORS.white, borderRadius: 16,
-    marginRight: 16, borderWidth: 1, borderColor: '#eee', overflow: 'hidden',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, elevation: 2,
-  },
+  reportCard: { width: 260, backgroundColor: COLORS.white, borderRadius: 16, marginRight: 16, borderWidth: 1, borderColor: '#eee', overflow: 'hidden', elevation: 2 },
   cardImage: { height: 140, width: '100%' },
-  criticalBadge: {
-    position: 'absolute', top: 10, left: 10, backgroundColor: '#ef4444',
-    paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, flexDirection: 'row', alignItems: 'center', gap: 4,
-  },
+  criticalBadge: { position: 'absolute', top: 10, left: 10, backgroundColor: '#ef4444', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 },
   criticalText: { color: '#FFF', fontSize: 10, fontWeight: '800' },
   cardContent: { padding: 12 },
   cardTitle: { fontSize: 16, fontWeight: '700', color: COLORS.textMain },
@@ -385,24 +308,12 @@ const styles = StyleSheet.create({
   miniBadgeTextBlue: { color: '#1d4ed8', fontSize: 10, fontWeight: '700' },
   miniBadgeGreen: { backgroundColor: '#dcfce7', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
   miniBadgeTextGreen: { color: '#15803d', fontSize: 10, fontWeight: '700' },
-  
-  // Map Styles (From Home.tsx)
-  mapCard: {
-    borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: '#E5E7EB',
-    height: 180, marginTop: 4,
-  },
+  mapCard: { borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: '#E5E7EB', height: 180, marginTop: 4 },
   mapImage: { flex: 1 },
   mapOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.05)' },
   mapPinContainer: { position: 'absolute', top: '35%', left: '45%' },
-  mapPin: {
-    width: 36, height: 36, borderRadius: 18, backgroundColor: COLORS.primary,
-    borderWidth: 3, borderColor: '#FFF', justifyContent: 'center', alignItems: 'center', elevation: 5,
-  },
-  mapInfoCard: {
-    position: 'absolute', bottom: 12, left: 12, right: 12,
-    backgroundColor: 'rgba(255,255,255,0.95)', borderRadius: 12, padding: 12,
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-  },
+  mapPin: { width: 36, height: 36, borderRadius: 18, backgroundColor: COLORS.primary, borderWidth: 3, borderColor: '#FFF', justifyContent: 'center', alignItems: 'center', elevation: 5 },
+  mapInfoCard: { position: 'absolute', bottom: 12, left: 12, right: 12, backgroundColor: 'rgba(255,255,255,0.95)', borderRadius: 12, padding: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   mapInfoLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   locationIconBg: { backgroundColor: 'rgba(55,236,19,0.2)', padding: 8, borderRadius: 20 },
   mapInfoTitle: { fontSize: 12, fontWeight: '700', color: COLORS.textMain },
