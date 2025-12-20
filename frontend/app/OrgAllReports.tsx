@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   SafeAreaView, View, Text, ScrollView, ImageBackground,
-  Pressable, StyleSheet, StatusBar, Image, Modal, ActivityIndicator
+  Pressable, StyleSheet, StatusBar, Image, Modal, TextInput
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -10,7 +10,7 @@ import * as Location from 'expo-location';
 // --- FIREBASE ---
 import { db } from '../src/config/firebase'; 
 import { collection, query, where, getDocs, limit } from 'firebase/firestore';
-import BottomNav from '../src/components/BottomNav';
+import OrgBottom from '../src/components/OrgBottom';
 
 const DESIGN = {
   primary: '#37ec13',
@@ -23,7 +23,7 @@ const DESIGN = {
   warningBg: '#FEF3C7',
 };
 
-// --- HELPER: TIME AGO ---
+// --- HELPER: DYNAMIC TIME ---
 const getTimeAgo = (seconds: number) => {
   if (!seconds) return '...';
   const now = Math.floor(Date.now() / 1000);
@@ -42,15 +42,14 @@ export default function OrgHome() {
   const [nearby, setNearby] = useState<any[]>([]);
   const [recent, setRecent] = useState<any[]>([]);
   
-  // --- FILTER STATES ---
-  const [sortBy, setSortBy] = useState('Date'); // Options: Date, Distance, Urgency
+  // --- FILTER & SORT STATES ---
+  const [sortBy, setSortBy] = useState('Date'); 
   const [showFilterModal, setShowFilterModal] = useState(false);
 
   useEffect(() => {
     fetchReports();
   }, []);
 
-  // Update sorted list whenever sortBy changes
   useEffect(() => {
     applySorting();
   }, [sortBy, allReports]);
@@ -65,7 +64,6 @@ export default function OrgHome() {
       const data = snap.docs.map(doc => {
         const reportData = doc.data();
         let dist = 0;
-        // Calculate distance if location exists
         if (userLoc && reportData.location) {
           dist = calculateDistance(
             userLoc.coords.latitude, userLoc.coords.longitude,
@@ -76,13 +74,13 @@ export default function OrgHome() {
       });
 
       setAllReports(data);
-      
-      // Fixed "Nearest" logic (Always closest 5)
       const nearestList = [...data].sort((a, b) => a.dist - b.dist).slice(0, 5);
       setNearby(nearestList);
-      
       setLoading(false);
-    } catch (e) { console.error(e); setLoading(false); }
+    } catch (e) { 
+      console.error(e); 
+      setLoading(false); 
+    }
   };
 
   const applySorting = () => {
@@ -110,13 +108,47 @@ export default function OrgHome() {
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" />
+
+      {/* --- STICKY HEADER --- */}
+      <View style={styles.header}>
+        <View style={styles.headerTop}>
+          <Pressable onPress={() => router.back()} style={styles.iconBtn}>
+            <MaterialIcons name="arrow-back" size={24} color={DESIGN.textMain} />
+          </Pressable>
+          <Text style={styles.headerTitle}>All Reports</Text>
+          <Pressable onPress={() => router.push('/OrgMap')} style={styles.iconBtn}>
+            <MaterialIcons name="map" size={24} color={DESIGN.textMain} />
+          </Pressable>
+        </View>
+
+        <View style={styles.searchSection}>
+          <View style={styles.searchWrapper}>
+            <MaterialIcons name="search" size={20} color={DESIGN.textSub} style={{ marginLeft: 12 }} />
+            <TextInput 
+              style={styles.searchInput}
+              placeholder="Search ID, Location or Condition"
+              placeholderTextColor={DESIGN.textSub}
+            />
+            <Pressable onPress={() => setShowFilterModal(true)}>
+                <MaterialIcons name="tune" size={20} color={DESIGN.textSub} style={{ marginRight: 12 }} />
+            </Pressable>
+          </View>
+        </View>
+      </View>
       
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
-        {/* Nearest Section (Horizontal) */}
+        
+        {/* --- NEAREST SECTION --- */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Nearest to You</Text>
-            <View style={styles.radiusBadge}><Text style={styles.radiusText}>2km Radius</Text></View>
+            <View style={styles.titleWithIcon}>
+                <MaterialIcons name="near-me" size={18} color={DESIGN.primary} />
+                <Text style={styles.sectionTitle}>Nearest to You</Text>
+            </View>
+            <Pressable style={styles.radiusButton}>
+              <Text style={styles.radiusText}>2km Radius</Text>
+              <MaterialIcons name="keyboard-arrow-down" size={14} color={DESIGN.primary} />
+            </Pressable>
           </View>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingLeft: 16 }}>
             {nearby.map(item => (
@@ -126,24 +158,20 @@ export default function OrgHome() {
                      <Text style={styles.nearDistText}>{item.dist.toFixed(1)} km</Text>
                    </View>
                  </ImageBackground>
-                 <Text style={styles.nearTitle} numberOfLines={1}>{item.breed || 'Rescue'}</Text>
+                 <Text style={styles.nearTitle} numberOfLines={1}>#{item.id.slice(-4)} {item.breed}</Text>
                </Pressable>
             ))}
           </ScrollView>
         </View>
 
-        {/* Recently Reported List */}
+        {/* --- RECENT REPORTS LIST --- */}
         <View style={styles.section}>
           <View style={[styles.sectionHeader, { paddingHorizontal: 16 }]}>
             <Text style={styles.sectionTitle}>Recent Reports</Text>
             
-            {/* CLICKABLE SORT BUTTON */}
-            <Pressable 
-              style={styles.filterBtn} 
-              onPress={() => setShowFilterModal(true)}
-            >
+            <Pressable style={styles.sortBtn} onPress={() => setShowFilterModal(true)}>
               <Text style={styles.sortText}>Sort by: {sortBy}</Text>
-              <MaterialIcons name="tune" size={14} color={DESIGN.textSub} />
+              <MaterialIcons name="expand-more" size={16} color={DESIGN.textSub} />
             </Pressable>
           </View>
 
@@ -159,7 +187,6 @@ export default function OrgHome() {
                             <Text style={[styles.rowBadgeText, { color: item.condition === 'Critical' ? DESIGN.danger : DESIGN.warning }]}>{item.condition}</Text>
                         </View>
                     </View>
-                    {/* DYNAMIC TIME AGO */}
                     <Text style={styles.rowTime}>{getTimeAgo(item.createdAt?.seconds)}</Text>
                   </View>
                   <Text style={styles.rowTitle} numberOfLines={1}>{item.breed || 'Reported Dog'}</Text>
@@ -174,7 +201,7 @@ export default function OrgHome() {
         </View>
       </ScrollView>
 
-      {/* FILTER MODAL */}
+      {/* --- FILTER MODAL --- */}
       <Modal visible={showFilterModal} transparent animationType="fade">
         <Pressable style={styles.modalOverlay} onPress={() => setShowFilterModal(false)}>
           <View style={styles.modalContent}>
@@ -182,7 +209,7 @@ export default function OrgHome() {
             {['Date', 'Distance', 'Urgency'].map((option) => (
               <Pressable 
                 key={option} 
-                style={[styles.optionBtn, sortBy === option && styles.activeOption]}
+                style={styles.optionBtn}
                 onPress={() => { setSortBy(option); setShowFilterModal(false); }}
               >
                 <Text style={[styles.optionText, sortBy === option && styles.activeOptionText]}>{option}</Text>
@@ -193,35 +220,50 @@ export default function OrgHome() {
         </Pressable>
       </Modal>
 
-      <BottomNav activePage="reports" />
+      <OrgBottom activePage="reports" />
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: DESIGN.bgLight },
+  
+  // Header
+  header: { backgroundColor: DESIGN.bgLight, borderBottomWidth: 1, borderBottomColor: '#EEE' },
+  headerTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 10 },
+  headerTitle: { fontSize: 18, fontWeight: '800', color: DESIGN.textMain },
+  iconBtn: { padding: 8 },
+  
+  // Search
+  searchSection: { paddingHorizontal: 16, paddingBottom: 12 },
+  searchWrapper: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF', borderRadius: 12, height: 46, elevation: 2 },
+  searchInput: { flex: 1, fontSize: 14, color: DESIGN.textMain, paddingHorizontal: 10 },
+
   section: { marginTop: 24 },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  sectionTitle: { fontSize: 18, fontWeight: '800', color: DESIGN.textMain, paddingLeft: 16 },
-  radiusBadge: { backgroundColor: 'rgba(55, 236, 19, 0.1)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 20, marginRight: 16 },
-  radiusText: { color: DESIGN.primary, fontSize: 10, fontWeight: '700' },
+  titleWithIcon: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingLeft: 16 },
+  sectionTitle: { fontSize: 18, fontWeight: '800', color: DESIGN.textMain },
+  
+  // Radius Button
+  radiusButton: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#37ec1315', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, marginRight: 16, gap: 2 },
+  radiusText: { color: DESIGN.primary, fontSize: 11, fontWeight: '800' },
   
   // Sort Button
-  filterBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#FFF', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: '#EEE' },
+  sortBtn: { flexDirection: 'row', alignItems: 'center', gap: 2, marginRight: 16 },
   sortText: { fontSize: 12, color: DESIGN.textSub, fontWeight: '700' },
 
   // List Items
   listContainer: { paddingHorizontal: 16, gap: 12 },
-  recentRow: { flexDirection: 'row', backgroundColor: '#FFF', padding: 12, borderRadius: 20, elevation: 1 },
-  rowImg: { width: 75, height: 75, borderRadius: 12 },
-  rowContent: { flex: 1, marginLeft: 12 },
+  recentRow: { flexDirection: 'row', backgroundColor: '#FFF', padding: 12, borderRadius: 24, elevation: 1 },
+  rowImg: { width: 75, height: 75, borderRadius: 16 },
+  rowContent: { flex: 1, marginLeft: 12, justifyContent: 'space-between' },
   rowHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   rowTitleArea: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   rowId: { fontSize: 12, fontWeight: '800' },
   rowBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8 },
   rowBadgeText: { fontSize: 9, fontWeight: '800' },
   rowTime: { fontSize: 10, color: DESIGN.textSub },
-  rowTitle: { fontSize: 15, fontWeight: '700', marginVertical: 4 },
+  rowTitle: { fontSize: 15, fontWeight: '700', marginVertical: 2 },
   rowFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   rowLocText: { fontSize: 11, color: DESIGN.textSub, flex: 1 },
   rowActionBtn: { backgroundColor: DESIGN.primary, width: 28, height: 28, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
@@ -233,9 +275,10 @@ const styles = StyleSheet.create({
   optionBtn: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 15, borderBottomWidth: 1, borderBottomColor: '#F3F4F6' },
   optionText: { fontSize: 16, fontWeight: '600', color: DESIGN.textMain },
   activeOptionText: { color: DESIGN.primary },
-  nearCard: { width: 120, marginRight: 12 },
-  nearImg: { width: 120, height: 120 },
+
+  nearCard: { width: 125, marginRight: 12 },
+  nearImg: { width: 125, height: 125 },
   nearOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.2)', justifyContent: 'flex-end', padding: 8, borderRadius: 16 },
-  nearDistText: { color: '#FFF', fontWeight: '800', fontSize: 12 },
-  nearTitle: { marginTop: 4, fontSize: 13, fontWeight: '700' }
+  nearDistText: { color: '#FFF', fontWeight: '900', fontSize: 12 },
+  nearTitle: { marginTop: 6, fontSize: 13, fontWeight: '700' }
 });
