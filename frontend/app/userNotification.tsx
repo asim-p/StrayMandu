@@ -16,6 +16,7 @@ import { useAuth } from '../src/context/AuthContext';
 // Import both the service and the interface
 import { notificationService, Notification } from '../src/services/notificationService';
 import BottomNav from '../src/components/BottomNav';
+import StyledAlert from '../src/components/Alert';
 
 const { width } = Dimensions.get('window');
 
@@ -38,7 +39,15 @@ export default function UserNotification() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('All');
-
+  const [alertConfig, setAlertConfig] = useState({
+    visible: false,
+    title: '',
+    message: '',
+    type: 'success' as 'success' | 'error' | 'info' | 'warning'
+  });
+  const showAlert = (title: string, message: string, type: any = 'success') => {
+    setAlertConfig({ visible: true, title, message, type });
+  };
   // --- FETCH REAL-TIME DATA ---
   useEffect(() => {
     if (!user?.uid) {
@@ -61,9 +70,16 @@ export default function UserNotification() {
   // --- ACTIONS ---
   const handleMarkAllRead = async () => {
     try {
+      if (notifications.filter(n => !n.isRead).length === 0) {
+        showAlert("All Caught Up!", "You have no unread notifications.", "info");
+        return;
+      }
+      
       await notificationService.markAllAsRead(notifications);
+      showAlert("Success", "All notifications marked as read.", "success");
     } catch (error) {
       console.error("Error marking all read:", error);
+      showAlert("Error", "Could not update notifications.", "error");
     }
   };
 
@@ -178,6 +194,15 @@ export default function UserNotification() {
 
       {/* --- NAVIGATION --- */}
       <BottomNav activePage="alerts" />
+
+      {/* --- CUSTOM ALERT COMPONENT --- */}
+      <StyledAlert
+        visible={alertConfig.visible}
+        title={alertConfig.title}
+        message={alertConfig.message}
+        type={alertConfig.type}
+        onDismiss={() => setAlertConfig({ ...alertConfig, visible: false })}
+      />
     </SafeAreaView>
   );
 }
