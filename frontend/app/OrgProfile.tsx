@@ -16,20 +16,22 @@ import {
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
-import { authService } from '../src/services/authService';
+import * as Location from 'expo-location'; // <--- Added Location
 
 // --- COMPONENTS ---
 import OrgBottomNav from '../src/components/OrgBottom'; 
 
 // --- SERVICES ---
+import { authService } from '../src/services/authService';
 import { uploadToCloudinary } from '../src/services/cloudinaryService'; 
 
 // --- FIREBASE IMPORTS ---
 import { auth, db } from '../src/config/firebase'; 
-import { doc, getDoc, updateDoc } from 'firebase/firestore'; 
+import { doc, getDoc, updateDoc, collection, query, where, limit, getDocs } from 'firebase/firestore'; 
 import { onAuthStateChanged } from 'firebase/auth';
 
 const { width } = Dimensions.get('window');
+const DEFAULT_IMAGE = require('../img/default.png'); 
 
 const COLORS = {
   primary: '#37ec13',
@@ -44,20 +46,27 @@ const COLORS = {
   purple: '#a855f7',
   teal: '#0d9488',
   red: '#ef4444', 
+  cardBorder: '#F3F4F6'
 };
 
 export default function OrgProfile() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [uploadingImage, setUploadingImage] = useState(false);
+  
+  // Profile Data
   const [orgData, setOrgData] = useState<any>(null);
   const [collectionName, setCollectionName] = useState('organizations');
+
+  // Rescues Data
+  const [resolvedRescues, setResolvedRescues] = useState<any[]>([]); // <--- New State
 
   useEffect(() => {
     let mounted = true;
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user && mounted) {
         try {
+          // 1. Fetch Profile Data
           let docRef = doc(db, "organizations", user.uid);
           let docSnap = await getDoc(docRef);
           let foundCollection = "organizations";
@@ -72,8 +81,23 @@ export default function OrgProfile() {
             setOrgData(docSnap.data());
             setCollectionName(foundCollection);
           }
+
+          // 2. Fetch Resolved Rescues
+          // Note: Adjust "Resolved" to match exactly how you save it in DB (e.g. "Resolved", "resolved", "Adopted")
+          const q = query(
+            collection(db, "reports"), 
+            where("status", "in", ["Resolved", "resolved", "Adopted"]), 
+            limit(5)
+          );
+          const querySnap = await getDocs(q);
+          const rescues = querySnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+          
+          if (mounted) {
+            setResolvedRescues(rescues);
+          }
+
         } catch (error) {
-          console.error("Error fetching org profile:", error);
+          console.error("Error fetching data:", error);
         } finally {
           if (mounted) setLoading(false);
         }
@@ -255,9 +279,9 @@ export default function OrgProfile() {
           ))}
         </View>
 
-        {/* Recent Rescues Section - RESTORED */}
+        {/* Recent Rescues Section (RESOLVED) */}
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Recent Rescues</Text>
+          <Text style={styles.sectionTitle}>Recent Victories</Text>
           <Pressable style={styles.viewAllBtn} onPress={() => router.push('/myReport')}>
             <Text style={styles.viewAllText}>View Gallery</Text>
             <MaterialIcons name="chevron-right" size={16} color={COLORS.primary} />
@@ -265,22 +289,42 @@ export default function OrgProfile() {
         </View>
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalScroll}>
-          <View style={styles.rescueCard}>
-            <ImageBackground source={{ uri: 'https://picsum.photos/seed/rescue1/400/250' }} style={styles.rescueImg}>
-              <View style={styles.rescueOverlay}>
-                <View style={[styles.statusBadge, { backgroundColor: '#10b981' }]}><Text style={styles.statusText}>Adopted</Text></View>
-                <Text style={styles.rescueTitle}>Litter of 3 found a home in Pokhara</Text>
+          {resolvedRescues.length === 0 ? (
+             <View style={{ width: width - 40, height: 100, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.white, borderRadius: 20 }}>
+                <Text style={{ color: COLORS.textSub }}>No recent resolved cases.</Text>
+             </View>
+          ) : (
+            resolvedRescues.map((report) => (
+              <View key={report.id} style={styles.reportCard}>
+                  <ImageBackground source={report.imageUrls ? { uri: report.imageUrls[0] } : DEFAULT_IMAGE} style={styles.cardImage}>
+                    <View style={styles.resolvedBadge}>
+                       <MaterialIcons name="check-circle" size={10} color={COLORS.white} style={{marginRight:4}} />
+                       <Text style={styles.criticalText}>RESOLVED</Text>
+                    </View>
+                  </ImageBackground>
+
+                  <View style={styles.cardContent}>
+                    <Text style={styles.cardTitle} numberOfLines={1}>{report.breed || 'Rescued Dog'}</Text>
+                    
+                    {/* DYNAMIC LOCATION CALCULATION */}
+                    <View style={styles.locationRowSmall}>
+                      <MaterialIcons name="location-on" size={12} color={COLORS.textSub} />
+                      <LocationAddress location={report.location} />
+                    </View>
+                    
+                    <View style={styles.cardButtons}>
+                        <Pressable 
+                          style={styles.actionBtn}
+                          onPress={() => router.push({ pathname: '/OrgDetailViews', params: { id: report.id } })}
+                        >
+                          <Text style={styles.actionBtnText}>View Details</Text>
+                          <MaterialIcons name="arrow-forward" size={14} color={COLORS.textMain} />
+                        </Pressable>
+                    </View>
+                  </View>
               </View>
-            </ImageBackground>
-          </View>
-          <View style={styles.rescueCard}>
-            <ImageBackground source={{ uri: 'https://picsum.photos/seed/rescue2/400/250' }} style={styles.rescueImg}>
-              <View style={styles.rescueOverlay}>
-                <View style={[styles.statusBadge, { backgroundColor: COLORS.blue }]}><Text style={styles.statusText}>Recovered</Text></View>
-                <Text style={styles.rescueTitle}>Kalu fully recovered from surgery</Text>
-              </View>
-            </ImageBackground>
-          </View>
+            ))
+          )}
         </ScrollView>
 
         {/* Logout Button */}
@@ -296,6 +340,48 @@ export default function OrgProfile() {
   );
 }
 
+// --- HELPER COMPONENT FOR ADDRESS ---
+const LocationAddress = ({ location }: { location: any }) => {
+  const [displayAddress, setDisplayAddress] = React.useState(
+    location?.address || "Locating..."
+  );
+
+  React.useEffect(() => {
+    if (location?.address) return;
+
+    const fetchAddress = async () => {
+      try {
+        if (location?.latitude && location?.longitude) {
+          const result = await Location.reverseGeocodeAsync({
+            latitude: location.latitude,
+            longitude: location.longitude,
+          });
+
+          if (result.length > 0) {
+            const place = result[0];
+            const street = place.street || place.name || '';
+            const city = place.city || place.subregion || '';
+            const formatted = [street, city].filter(Boolean).join(', ');
+            setDisplayAddress(formatted);
+          } else {
+            setDisplayAddress("Unknown Location");
+          }
+        }
+      } catch (error) {
+        setDisplayAddress(`${location?.latitude.toFixed(2)}, ${location?.longitude.toFixed(2)}`);
+      }
+    };
+
+    fetchAddress();
+  }, [location]);
+
+  return (
+    <Text style={styles.locationTextSmall} numberOfLines={1}>
+      {displayAddress}
+    </Text>
+  );
+};
+
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: COLORS.backgroundLight },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
@@ -306,6 +392,8 @@ const styles = StyleSheet.create({
   headerRight: { flexDirection: 'row', gap: 8 },
   iconButton: { width: 40, height: 40, justifyContent: 'center' },
   iconButtonSmall: { width: 40, height: 40, borderRadius: 20, backgroundColor: COLORS.backgroundLight, justifyContent: 'center', alignItems: 'center' },
+  
+  // Profile Hero
   profileHero: { alignItems: 'center', paddingVertical: 24 },
   avatarContainer: { position: 'relative', marginBottom: 12 },
   avatar: { width: 100, height: 100, borderRadius: 50, borderWidth: 3, borderColor: COLORS.white },
@@ -317,6 +405,8 @@ const styles = StyleSheet.create({
   locationText: { fontSize: 14, color: COLORS.textSub },
   ngoTag: { backgroundColor: '#dbeafe', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 20 },
   ngoTagText: { fontSize: 10, fontWeight: '800', color: '#1d4ed8' },
+  
+  // Impact
   impactSection: { paddingHorizontal: 16, marginBottom: 16 },
   impactCard: { backgroundColor: COLORS.surfaceDark, borderRadius: 24, padding: 24, alignItems: 'center' },
   impactIconBg: { backgroundColor: 'rgba(255,255,255,0.1)', padding: 12, borderRadius: 24, marginBottom: 12 },
@@ -326,22 +416,34 @@ const styles = StyleSheet.create({
   divider: { width: '100%', height: 1, backgroundColor: 'rgba(255,255,255,0.1)', marginVertical: 16 },
   impactFooter: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   impactFooterText: { color: '#94a3b8', fontSize: 12 },
+  
+  // Stats
   statsGrid: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 10, marginBottom: 10 },
   statCard: { backgroundColor: COLORS.white, width: (width - 44) / 2, margin: 6, borderRadius: 20, padding: 16, borderWidth: 1, borderColor: '#F3F4F6' },
   statIconBox: { padding: 8, borderRadius: 12, alignSelf: 'flex-start', marginBottom: 10 },
   statBigNumber: { fontSize: 24, fontWeight: '900', color: COLORS.textMain },
   statLabel: { fontSize: 12, color: COLORS.textSub, fontWeight: '600' },
+  
+  // Recent Rescues (UPDATED)
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, marginVertical: 15 },
   sectionTitle: { fontSize: 18, fontWeight: '800', color: COLORS.textMain },
   viewAllBtn: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   viewAllText: { fontSize: 12, fontWeight: '800', color: COLORS.primary },
   horizontalScroll: { paddingLeft: 16, paddingRight: 8, marginBottom: 20 },
-  rescueCard: { width: 280, height: 160, borderRadius: 20, marginRight: 16, overflow: 'hidden' },
-  rescueImg: { flex: 1, justifyContent: 'flex-end' },
-  rescueOverlay: { padding: 12, backgroundColor: 'rgba(0,0,0,0.4)' },
-  statusBadge: { alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 12, marginBottom: 4 },
-  statusText: { color: COLORS.white, fontSize: 10, fontWeight: '800' },
-  rescueTitle: { color: COLORS.white, fontSize: 14, fontWeight: '700', lineHeight: 18 },
+  
+  reportCard: { width: 200, backgroundColor: COLORS.white, borderRadius: 16, marginRight: 12, borderWidth: 1, borderColor: COLORS.cardBorder, overflow: 'hidden' },
+  cardImage: { height: 120, width: '100%', justifyContent: 'flex-start', alignItems: 'flex-end', padding: 8 },
+  resolvedBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#10b981', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
+  criticalText: { color: COLORS.white, fontSize: 10, fontWeight: '800' },
+  cardContent: { padding: 12 },
+  cardTitle: { fontSize: 14, fontWeight: '800', color: COLORS.textMain, marginBottom: 4 },
+  locationRowSmall: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 12 },
+  locationTextSmall: { fontSize: 11, color: COLORS.textSub, flex: 1 },
+  
+  cardButtons: { flexDirection: 'row', gap: 8 },
+  actionBtn: { flex: 1, flexDirection: 'row', height: 32, backgroundColor: COLORS.backgroundLight, borderRadius: 8, alignItems: 'center', justifyContent: 'center', gap: 4 },
+  actionBtnText: { fontSize: 11, fontWeight: '700', color: COLORS.textMain },
+
   logoutBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff', margin: 16, padding: 16, borderRadius: 15, borderWidth: 1, borderColor: '#fee2e2' },
   logoutText: { color: COLORS.red, fontWeight: '800', marginLeft: 8 }
 });

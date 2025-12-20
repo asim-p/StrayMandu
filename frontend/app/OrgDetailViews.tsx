@@ -18,6 +18,7 @@ import {
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
+import * as Location from 'expo-location'; // <--- ADDED THIS
 
 // Firebase Imports
 import { auth, db } from '../src/config/firebase'; 
@@ -35,7 +36,7 @@ interface UserProfile {
 }
 
 const COLORS = {
-  primary: '#39E53D',
+  primary: '#37ec13',
   backgroundLight: '#f6f8f6',
   textMain: '#121811',
   textSub: '#5c6f57',
@@ -60,10 +61,11 @@ export default function OrgDetailViews() {
   const [loading, setLoading] = useState(true);
   const [report, setReport] = useState<DogReportData | null>(null);
   const [reporterUser, setReporterUser] = useState<UserProfile | null>(null);
-  
+  const [displayAddress, setDisplayAddress] = useState("Loading address..."); // <--- NEW STATE FOR ADDRESS
+
   // Organization Management State
   const [isClaimed, setIsClaimed] = useState(false);
-  const [orgStatus, setOrgStatus] = useState('Pending'); // Pending, In Progress, Rescued
+  const [orgStatus, setOrgStatus] = useState('Pending'); 
   const [assignedTeam, setAssignedTeam] = useState('Unassigned');
   const [saving, setSaving] = useState(false);
 
@@ -80,8 +82,35 @@ export default function OrgDetailViews() {
           const reportData = docSnap.data() as DogReportData;
           setReport(reportData);
 
-          // Check if this report is already claimed (You would likely store this in DB)
-          // For demo, we assume if 'claimedBy' field exists, it is claimed
+          // --- REVERSE GEOCODING LOGIC ---
+          if (reportData.location?.address) {
+            // If address exists in DB, use it
+            setDisplayAddress(reportData.location.address);
+          } else if (reportData.location?.latitude && reportData.location?.longitude) {
+            // If no address, calculate it from coordinates
+            try {
+              const reverseGeocode = await Location.reverseGeocodeAsync({
+                latitude: reportData.location.latitude,
+                longitude: reportData.location.longitude
+              });
+              
+              if (reverseGeocode.length > 0) {
+                const place = reverseGeocode[0];
+                // Construct a readable string
+                const street = place.street || place.name || '';
+                const city = place.city || place.subregion || '';
+                const formatted = [street, city].filter(Boolean).join(', ');
+                setDisplayAddress(formatted || "Location found (No street name)");
+              } else {
+                setDisplayAddress("Unknown Location");
+              }
+            } catch (geoError) {
+              console.log("Geocoding failed", geoError);
+              setDisplayAddress(`${reportData.location.latitude.toFixed(4)}, ${reportData.location.longitude.toFixed(4)}`);
+            }
+          }
+          // -------------------------------
+
           if (reportData.claimedBy) {
             setIsClaimed(true);
             setOrgStatus(reportData.orgStatus || 'In Progress');
@@ -124,16 +153,14 @@ export default function OrgDetailViews() {
               const currentUser = auth.currentUser;
               if (!currentUser) return;
 
-              // Update Firebase
               const reportRef = doc(db, 'reports', id as string);
               await updateDoc(reportRef, {
                 claimedBy: currentUser.uid,
                 orgStatus: 'In Progress',
                 assignedTeam: 'Unassigned',
-                status: 'Rescue In Progress' // Update public status
+                status: 'Rescue In Progress'
               });
 
-              // Update Local State
               setIsClaimed(true);
               setOrgStatus('In Progress');
               Alert.alert("Success", "You have taken responsibility for this case.");
@@ -196,7 +223,7 @@ export default function OrgDetailViews() {
         <Pressable onPress={() => router.back()} style={styles.iconButton}>
           <MaterialIcons name="arrow-back" size={24} color={COLORS.textMain} />
         </Pressable>
-        <Text style={styles.headerTitle}>Org View</Text>
+        <Text style={styles.headerTitle}>Organization View</Text>
         <View style={{ width: 40 }} />
       </View>
 
@@ -227,7 +254,6 @@ export default function OrgDetailViews() {
                 </View>
               )}
             </View>
-            {/* Condition Tags */}
             <View style={styles.miniTagRow}>
               <View style={[styles.miniTag, report.condition === 'Injured' && styles.injuredTag]}>
                 <Text style={report.condition === 'Injured' ? styles.injuredTagText : styles.tagText}>{report.condition}</Text>
@@ -236,19 +262,14 @@ export default function OrgDetailViews() {
             </View>
           </View>
 
-          {/* --------------------------------------------------------- */}
-          {/* INTERNAL MANAGEMENT SECTION                   */}
-          {/* --------------------------------------------------------- */}
+          {/* INTERNAL MANAGEMENT SECTION */}
           <View style={styles.managementSection}>
             <View style={styles.mgmtHeader}>
               <MaterialIcons name="admin-panel-settings" size={20} color={COLORS.primary} />
               <Text style={styles.mgmtTitle}>Internal Management</Text>
             </View>
 
-            {/* Controls (Greyed out if not claimed) */}
             <View style={[styles.controlGrid, !isClaimed && styles.disabledArea]}>
-              
-              {/* Status Selector */}
               <Pressable style={styles.controlBox} onPress={handleChangeStatus} disabled={!isClaimed}>
                 <Text style={styles.controlLabel}>CURRENT STATUS</Text>
                 <View style={styles.controlValueRow}>
@@ -257,7 +278,6 @@ export default function OrgDetailViews() {
                 </View>
               </Pressable>
 
-              {/* Team Selector */}
               <Pressable style={styles.controlBox} onPress={handleAssignTeam} disabled={!isClaimed}>
                 <Text style={styles.controlLabel}>ASSIGNED TEAM</Text>
                 <View style={styles.controlValueRow}>
@@ -267,7 +287,6 @@ export default function OrgDetailViews() {
               </Pressable>
             </View>
 
-            {/* Take Responsibility Button */}
             {!isClaimed ? (
               <Pressable 
                 style={({ pressed }) => [styles.claimButton, pressed && { opacity: 0.9 }]} 
@@ -297,7 +316,6 @@ export default function OrgDetailViews() {
                </Text>
             )}
           </View>
-          {/* --------------------------------------------------------- */}
 
           {/* Description */}
           <View style={styles.section}>
@@ -333,7 +351,8 @@ export default function OrgDetailViews() {
                 <Marker coordinate={report.location} />
               </MapView>
             </View>
-            <Text style={styles.addressTitle}>{report.location.address || "Unknown Address"}</Text>
+            {/* UPDATED TO USE NEW STATE */}
+            <Text style={styles.addressTitle}>{displayAddress}</Text>
           </View>
 
           {/* Reporter Info */}
@@ -393,7 +412,6 @@ const styles = StyleSheet.create({
   tagText: { color: COLORS.textMain, fontSize: 11, fontWeight: '600' },
   metaText: { color: COLORS.textSub, fontSize: 13, fontWeight: '500' },
 
-  // --- MANAGEMENT SECTION STYLES ---
   managementSection: {
     backgroundColor: COLORS.white,
     borderRadius: 16,
@@ -426,20 +444,19 @@ const styles = StyleSheet.create({
   
   claimButton: {
     flexDirection: 'row',
-    backgroundColor: COLORS.primary, // Changed to GREEN
+    backgroundColor: COLORS.primary,
     paddingVertical: 14,
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 16,
   },
-  claimButtonText: { color: COLORS.textMain, fontSize: 14, fontWeight: '800' }, // Changed text to DARK for contrast
+  claimButtonText: { color: COLORS.textMain, fontSize: 14, fontWeight: '800' },
   
   activeFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 16, paddingTop: 10, borderTopWidth: 1, borderTopColor: COLORS.cardBorder },
   activeText: { color: COLORS.primary, fontWeight: '700', fontSize: 12 },
   saveIcon: { padding: 4 },
   disclaimerText: { fontSize: 10, color: COLORS.textSub, textAlign: 'center', marginTop: 10, fontStyle: 'italic' },
-  // ---------------------------------
 
   section: { marginBottom: 24 },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
