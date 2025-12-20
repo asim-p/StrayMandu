@@ -64,7 +64,7 @@ export default function Login() {
       router.replace('/home'); 
 
     } catch (err: any) {
-      console.error('Login error:', err);
+      //console.error('Login error:', err);
       
       let friendlyMessage = 'Unable to log in. Please try again.';
       
@@ -200,7 +200,7 @@ export default function Login() {
               <View style={styles.dividerLine} />
             </View>
 
-            <Pressable style={({ pressed }) => [styles.googleButton, pressed && styles.buttonPressed]}>
+            <Pressable disabled={true} style={({ pressed }) => [styles.googleButton, pressed && styles.buttonPressed]}>
               <AntDesign name="google" size={20} color="#DB4437" />
               <Text style={styles.googleButtonText}>Log in with Google</Text>
             </Pressable>

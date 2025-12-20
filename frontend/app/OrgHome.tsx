@@ -189,7 +189,7 @@ export default function OrgHome() {
         {/* Needing Review */}
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Needing Review <Text style={styles.urgentTag}>Urgent</Text></Text>
-          <Pressable style={styles.viewAllBtn} onPress={() => router.push('/reports-queue')}>
+          <Pressable style={styles.viewAllBtn} onPress={() => router.push('/OrgAllReports')}>
             <Text style={styles.viewAllText}>View All</Text>
             <MaterialIcons name="chevron-right" size={16} color={COLORS.primary} />
           </Pressable>
@@ -390,7 +390,31 @@ const styles = StyleSheet.create({
   mapPinContainer: { position: 'absolute' }, 
   
   mapPin: { width: 36, height: 36, borderRadius: 18, backgroundColor: COLORS.primary, borderWidth: 3, borderColor: '#FFF', justifyContent: 'center', alignItems: 'center', elevation: 5 },
-  mapInfoCard: { position: 'absolute', bottom: 12, left: 12, right: 12, backgroundColor: 'rgba(255,255,255,0.95)', borderRadius: 12, padding: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  
+  // --- FIX APPLIED HERE ---
+  mapInfoCard: { 
+    position: 'absolute', 
+    bottom: 12, 
+    left: 12, 
+    right: 12, 
+    backgroundColor: 'rgba(255,255,255,0.95)', 
+    borderRadius: 12, 
+    padding: 12, 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    alignItems: 'center',
+    
+    // iOS Shadow Support
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    // Android Shadow
+    elevation: 8,
+    // Ensure it sits on top of MapView on iOS
+    zIndex: 10 
+  },
+  
   mapInfoLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   locationIconBg: { backgroundColor: 'rgba(55,236,19,0.2)', padding: 8, borderRadius: 20 },
   mapInfoTitle: { fontSize: 12, fontWeight: '700', color: COLORS.textMain },

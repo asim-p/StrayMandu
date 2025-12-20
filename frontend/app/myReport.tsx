@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   SafeAreaView,
   View,
@@ -10,7 +10,6 @@ import {
   TextInput,
   StatusBar,
   ActivityIndicator,
-  Dimensions,
   RefreshControl,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -18,12 +17,10 @@ import { useRouter } from 'expo-router';
 
 // Firebase Imports
 import { auth, db } from '../src/config/firebase';
-import { collection, query, where, getDocs, orderBy } from 'firebase/firestore';
+import { collection, query, where, getDocs, orderBy, Timestamp } from 'firebase/firestore';
 
 // Types
 import { DogReportData } from '../src/services/reportService';
-
-const { width } = Dimensions.get('window');
 
 const COLORS = {
   primary: '#37ec13',
@@ -37,9 +34,15 @@ const COLORS = {
   grayLight: '#9ca3af',
 };
 
+// Extend the interface to include the ID and Timestamp from Firestore read
+interface ReportWithId extends DogReportData {
+  id: string;
+  createdAt?: Timestamp; // Firestore returns a Timestamp object
+}
+
 export default function MyReports() {
   const router = useRouter();
-  const [reports, setReports] = useState<(DogReportData & { id: string })[]>([]);
+  const [reports, setReports] = useState<ReportWithId[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -54,7 +57,9 @@ export default function MyReports() {
 
     try {
       const reportsRef = collection(db, 'reports');
-      // NOTE: This query requires a Firestore Composite Index
+      
+      // NOTE: Ensure you have created the composite index in Firebase Console
+      // Collection: reports | Fields: reporterId (Asc/Desc), createdAt (Desc)
       const q = query(
         reportsRef,
         where('reporterId', '==', user.uid),
@@ -65,7 +70,7 @@ export default function MyReports() {
       const data = querySnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
-      })) as (DogReportData & { id: string })[];
+      })) as ReportWithId[];
       
       setReports(data);
     } catch (error) {
@@ -85,18 +90,25 @@ export default function MyReports() {
     fetchMyReports();
   }, []);
 
-  const filteredReports = reports.filter(report => {
-    const matchesSearch = 
-      report.name?.toLowerCase().includes(searchQuery.toLowerCase()) || 
-      report.id.toLowerCase().includes(searchQuery.toLowerCase());
-    
-    const matchesFilter = 
-      filter === 'All' || 
-      (filter === 'Active' && report.status !== 'resolved') || 
-      (filter === 'Completed' && report.status === 'resolved');
+  // Optimized Filter Logic
+  const filteredReports = useMemo(() => {
+    return reports.filter(report => {
+      // FIX: Safely handle optional name (prevent crash if name is undefined)
+      const reportName = report.name ? report.name.toLowerCase() : '';
+      const query = searchQuery.toLowerCase();
 
-    return matchesSearch && matchesFilter;
-  });
+      const matchesSearch = 
+        reportName.includes(query) || 
+        report.id.toLowerCase().includes(query);
+      
+      const matchesFilter = 
+        filter === 'All' || 
+        (filter === 'Active' && report.status !== 'resolved') || 
+        (filter === 'Completed' && report.status === 'resolved');
+
+      return matchesSearch && matchesFilter;
+    });
+  }, [reports, searchQuery, filter]);
 
   const getStatusStyle = (status: string) => {
     switch (status) {
@@ -166,9 +178,9 @@ export default function MyReports() {
             {filteredReports.map((report) => {
               const status = getStatusStyle(report.status);
               
-              // Formatting Firebase Timestamp safely
-              const displayDate = (report as any).createdAt?.seconds 
-                ? new Date((report as any).createdAt.seconds * 1000).toLocaleDateString()
+              // FIX: Type-safe Date formatting
+              const displayDate = report.createdAt?.seconds 
+                ? new Date(report.createdAt.seconds * 1000).toLocaleDateString()
                 : 'Recently';
 
               return (
@@ -242,10 +254,11 @@ export default function MyReports() {
           </View>
         </Pressable>
 
-        <Pressable style={styles.navItem}>
+        {/* FIX: Changed Pressable to View (Unclickable) for Profile since we are effectively in the profile section */}
+        <View style={styles.navItem}>
           <MaterialIcons name="person" size={28} color={COLORS.primary} />
           <Text style={[styles.navText, { color: COLORS.primary, fontWeight: '700' }]}>Profile</Text>
-        </Pressable>
+        </View>
       </View>
     </SafeAreaView>
   );
