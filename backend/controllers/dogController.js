@@ -16,6 +16,7 @@ exports.addDog = async (req, res) => {
   }
 };
 
+
 exports.getAllDogs = async (req, res) => {
   try {
     const dogs = await Dog.find().sort({ createdAt: -1 });
