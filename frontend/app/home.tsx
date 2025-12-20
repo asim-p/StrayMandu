@@ -173,7 +173,7 @@ export default function Home() {
         
         <Pressable 
           style={styles.iconButton}
-          onPress={() => router.push('/notifications')}
+          onPress={() => router.push('/OrgHome')}
         >
           <MaterialIcons name="notifications" size={24} color={COLORS.textMain} />
         </Pressable>
