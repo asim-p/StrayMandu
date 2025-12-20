@@ -59,8 +59,6 @@ export default function OrgHome() {
     const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
       if (user && mounted) {
         try {
-          // --- FIXED LOGIC: CHECK BOTH COLLECTIONS ---
-          
           // 1. First, try the 'organizations' collection
           let docRef = doc(db, "organizations", user.uid);
           let docSnap = await getDoc(docRef);
@@ -74,7 +72,6 @@ export default function OrgHome() {
           // 3. Set the data if found
           if (docSnap.exists()) {
             const data = docSnap.data();
-            // Check multiple potential field names for the Organization Name
             setOrgName(data.organizationName || data.orgName || data.name || 'StrayMandu HQ');
             setProfilePhoto(data.photoURL || user.photoURL);
           }
@@ -219,12 +216,18 @@ export default function OrgHome() {
                     <Text style={styles.cardLoc} numberOfLines={1}>
                         <MaterialIcons name="location-on" size={12} color={COLORS.textSub} /> {report.location?.address || 'Unknown Location'}
                     </Text>
+                    
+                    {/* SINGLE VIEW BUTTON */}
                     <View style={styles.cardButtons}>
-                        <Pressable style={styles.detailsBtn} onPress={() => router.push({ pathname: '/detailReports', params: { id: report.id } })}>
-                        <Text style={styles.btnText}>Details</Text>
+                        <Pressable 
+                          style={styles.actionBtn}
+                          onPress={() => router.push({ pathname: '/OrgDetailViews', params: { id: report.id } })}
+                        >
+                          <Text style={styles.actionBtnText}>View</Text>
+                          <MaterialIcons name="arrow-forward" size={14} color={COLORS.textMain} />
                         </Pressable>
-                        <Pressable style={styles.assignBtn}><Text style={[styles.btnText, {color: COLORS.textMain}]}>Assign</Text></Pressable>
                     </View>
+
                     </View>
                 </View>
                 ))
@@ -253,14 +256,14 @@ export default function OrgHome() {
                   <View style={styles.mapPin}><MaterialCommunityIcons name="office-building" size={18} color="#121811" /></View>
               </View>
 
-              {/* Ambulance 1 (Slightly Top-Right of HQ) */}
+              {/* Ambulance 1 */}
               <View style={[styles.mapPinContainer, { top: '28%', left: '55%' }]}>
                   <View style={[styles.mapPin, { backgroundColor: COLORS.white, borderColor: COLORS.primary }]}>
                     <MaterialCommunityIcons name="ambulance" size={16} color={COLORS.primary} />
                   </View>
               </View>
 
-              {/* Ambulance 2 (Slightly Bottom-Left of HQ) */}
+              {/* Ambulance 2 */}
               <View style={[styles.mapPinContainer, { top: '42%', left: '38%' }]}>
                    <View style={[styles.mapPin, { backgroundColor: COLORS.white, borderColor: COLORS.warning }]}>
                     <MaterialCommunityIcons name="ambulance" size={16} color={COLORS.warning} />
@@ -349,10 +352,21 @@ const styles = StyleSheet.create({
   cardContent: { padding: 12 },
   cardTitle: { fontSize: 16, fontWeight: '700', color: COLORS.textMain },
   cardLoc: { fontSize: 12, color: COLORS.textSub, marginTop: 4 },
-  cardButtons: { flexDirection: 'row', gap: 8, marginTop: 12 },
-  detailsBtn: { flex: 1, height: 36, backgroundColor: '#f3f4f6', borderRadius: 8, justifyContent: 'center', alignItems: 'center' },
-  assignBtn: { flex: 1, height: 36, backgroundColor: COLORS.primary, borderRadius: 8, justifyContent: 'center', alignItems: 'center' },
-  btnText: { fontSize: 12, fontWeight: '700' },
+  
+  // --- BUTTON STYLES ---
+  cardButtons: { marginTop: 12 },
+  actionBtn: { 
+    height: 38, 
+    backgroundColor: COLORS.primary, 
+    borderRadius: 8, 
+    flexDirection: 'row',
+    justifyContent: 'center', 
+    alignItems: 'center',
+    gap: 6
+  },
+  actionBtnText: { fontSize: 13, fontWeight: '800', color: COLORS.textMain },
+  // ---------------------
+
   miniStatsRow: { flexDirection: 'row', gap: 6 },
   miniBadgeBlue: { backgroundColor: '#dbeafe', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
   miniBadgeTextBlue: { color: '#1d4ed8', fontSize: 10, fontWeight: '700' },
