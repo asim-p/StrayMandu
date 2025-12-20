@@ -58,7 +58,7 @@ export default function OrgBottomNav({ activePage }: OrgBottomNavProps) {
         </Pressable>
 
         {/* 5. ABOUT */}
-        <Pressable onPress={() => router.push('/OrgAbout')} style={styles.navItem}>
+        <Pressable onPress={() => router.push('/manageTeams')} style={styles.navItem}>
           <MaterialIcons name="info" size={26} color={getColor('about')} />
           <Text style={getLabelStyle('about')}>About</Text>
         </Pressable>
