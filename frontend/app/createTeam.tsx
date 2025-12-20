@@ -58,25 +58,36 @@ export default function CreateTeam() {
   };
 
   // --- LOGIC: SAVE TO FIREBASE ---
+  // --- LOGIC: SAVE TO FIREBASE ---
   const handleCreateTeam = async () => {
-    if (!teamName.trim()) return Alert.alert("Error", "Team name is required.");
-    if (members.length === 0) return Alert.alert("Error", "Add at least one member.");
+    // 1. Validation
+    if (!teamName.trim()) return Alert.alert("Missing Info", "Team name is required.");
+    
+    // Filter out empty rows (where user clicked add but didn't type)
+    const validMembers = members.filter(m => m.name.trim() !== "" && m.phone.trim() !== "");
+    
+    if (validMembers.length === 0) return Alert.alert("Missing Members", "Add at least one member.");
 
     setLoading(true);
     try {
+      const user = auth.currentUser;
+      if (!user) throw new Error("You must be logged in to create a team.");
+
+      // 2. Prepare Data
       const teamData = {
         name: teamName.trim(),
         focus: teamFocus,
-        members: members,
-        orgId: auth.currentUser?.uid || 'guest',
+        members: validMembers, // Stores array of {name, phone}
+        orgId: user.uid,       // Links to the Organization
         createdAt: serverTimestamp(),
         status: 'active'
       };
 
+      // 3. Write to Firestore 'teams' collection
       await addDoc(collection(db, "teams"), teamData);
       
       Alert.alert("Success", "Team created successfully!", [
-        { text: "Done", onPress: () => router.replace('/OrgHome') }
+        { text: "Done", onPress: () => router.back() } // Go back to list
       ]);
     } catch (error: any) {
       console.error(error);
