@@ -22,6 +22,9 @@ import { auth, db } from '../src/config/firebase';
 import { doc, getDoc, collection, query, orderBy, limit, getDocs } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
 
+// --- NOTIFICATION SERVICE ---
+import { notificationService } from '../src/services/notificationService';
+
 const DEFAULT_IMAGE = require('../img/default.png'); 
 
 const COLORS = {
@@ -47,6 +50,9 @@ export default function Home() {
   // --- NEW STATE FOR REPORTS ---
   const [latestReports, setLatestReports] = useState<any[]>([]);
   const [loadingReports, setLoadingReports] = useState(true);
+
+  // --- NEW STATE FOR NOTIFICATIONS ---
+  const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
 
   const getGreeting = () => {
     const hour = new Date().getHours();
@@ -140,9 +146,28 @@ export default function Home() {
 
     fetchReports();
 
+    // 4. SUBSCRIBE TO NOTIFICATIONS FOR UNREAD COUNT
+    const user = auth.currentUser;
+    let unsubscribeNotifications: (() => void) | null = null;
+    
+    if (user) {
+      unsubscribeNotifications = notificationService.subscribeToNotifications(
+        user.uid,
+        (notifications) => {
+          const unreadCount = notifications.filter(n => !n.isRead).length;
+          if (mounted) {
+            setUnreadNotificationCount(unreadCount);
+          }
+        }
+      );
+    }
+
     return () => { 
       mounted = false; 
       unsubscribeAuth();
+      if (unsubscribeNotifications) {
+        unsubscribeNotifications();
+      }
     };
   }, []);
 
@@ -177,6 +202,13 @@ export default function Home() {
           onPress={() => router.push('/userNotification')}
         >
           <MaterialIcons name="notifications" size={24} color={COLORS.textMain} />
+          {unreadNotificationCount > 0 && (
+            <View style={styles.notificationBadge}>
+              <Text style={styles.notificationBadgeText}>
+                {unreadNotificationCount > 99 ? '99+' : unreadNotificationCount}
+              </Text>
+            </View>
+          )}
         </Pressable>
       </View>
 
@@ -391,6 +423,26 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.backgroundLight,
     justifyContent: 'center',
     alignItems: 'center',
+    position: 'relative',
+  },
+  notificationBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    backgroundColor: '#EF4444',
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: COLORS.backgroundLight,
+  },
+  notificationBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '800',
+    textAlign: 'center',
   },
   sectionContainer: {
     paddingHorizontal: 16,

@@ -20,10 +20,14 @@ export interface DogReportData {
   description: string;
   imageUrls: string[];
   
-  status: 'pending' | 'ongoing' | 'resolved' | 'acknowledged';
+  status: 'pending' | 'ongoing' | 'resolved' | 'acknowledged' | 'completed';
   
   // NEW: Field for the rescuer, optional/null initially
-  rescuerID?: string | null; 
+  rescuerID?: string | null;
+  
+  // Team assignment fields
+  assignedTeam?: string;
+  assignedTeamId?: string;
 }
 
 export const saveDogReport = async (data: DogReportData) => {
