@@ -43,7 +43,7 @@ export default function OrgBottomNav({ activePage }: OrgBottomNavProps) {
         </Pressable>
 
         {/* 2. MAP */}
-        <Pressable onPress={() => router.push('/map')} style={styles.navItem}>
+        <Pressable onPress={() => router.push('/OrgMap')} style={styles.navItem}>
           <MaterialIcons name="map" size={26} color={getColor('map')} />
           <Text style={getLabelStyle('map')}>Map</Text>
         </Pressable>
@@ -58,7 +58,7 @@ export default function OrgBottomNav({ activePage }: OrgBottomNavProps) {
         </Pressable>
 
         {/* 5. ABOUT */}
-        <Pressable onPress={() => router.push('/aboutus')} style={styles.navItem}>
+        <Pressable onPress={() => router.push('/OrgAbout')} style={styles.navItem}>
           <MaterialIcons name="info" size={26} color={getColor('about')} />
           <Text style={getLabelStyle('about')}>About</Text>
         </Pressable>

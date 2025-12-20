@@ -12,6 +12,7 @@ Stray dogs in Nepal present public-health and safety challenges while also suffe
 ### Frontend
 ✅
 ✅
+✅
 
 ### Backend
 ✅ User register/login <br>
