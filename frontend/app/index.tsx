@@ -113,7 +113,7 @@ export default function Home() {
                 styles.primaryButton,
                 pressed && styles.buttonPressed
               ]}
-              onPress={() => router.push('/report')}
+              onPress={() => router.push('/login')}
             >
               <Text style={styles.locationIcon}>📍</Text>
               <Text style={styles.primaryButtonText}>Report a Stray</Text>
@@ -124,7 +124,7 @@ export default function Home() {
                 styles.secondaryButton,
                 pressed && styles.buttonPressed
               ]}
-              onPress={() => router.push('/reportdocs')}
+              onPress={() => router.push('/help')}
             >
               <Text style={styles.secondaryButtonText}>How You Can Help</Text>
             </Pressable>

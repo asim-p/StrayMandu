@@ -15,17 +15,18 @@ import {
 } from 'react-native';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import * as ImagePicker from 'expo-image-picker'; // Added Image Picker
+import * as ImagePicker from 'expo-image-picker';
+import { authService } from '../src/services/authService';
 
 // --- COMPONENTS ---
 import OrgBottomNav from '../src/components/OrgBottom'; 
 
 // --- SERVICES ---
-import { uploadToCloudinary } from '../src/services/cloudinaryService'; // Added Cloudinary Service
+import { uploadToCloudinary } from '../src/services/cloudinaryService'; 
 
 // --- FIREBASE IMPORTS ---
 import { auth, db } from '../src/config/firebase'; 
-import { doc, getDoc, updateDoc } from 'firebase/firestore'; // Added updateDoc
+import { doc, getDoc, updateDoc } from 'firebase/firestore'; 
 import { onAuthStateChanged } from 'firebase/auth';
 
 const { width } = Dimensions.get('window');
@@ -42,26 +43,25 @@ const COLORS = {
   orange: '#f97316',
   purple: '#a855f7',
   teal: '#0d9488',
+  red: '#ef4444', 
 };
 
 export default function OrgProfile() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
-  const [uploadingImage, setUploadingImage] = useState(false); // UI State for upload
+  const [uploadingImage, setUploadingImage] = useState(false);
   const [orgData, setOrgData] = useState<any>(null);
-  const [collectionName, setCollectionName] = useState('organizations'); // Track where data came from
+  const [collectionName, setCollectionName] = useState('organizations');
 
   useEffect(() => {
     let mounted = true;
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user && mounted) {
         try {
-          // 1. Try 'organizations' collection first
           let docRef = doc(db, "organizations", user.uid);
           let docSnap = await getDoc(docRef);
           let foundCollection = "organizations";
 
-          // 2. If not found, try 'users' collection
           if (!docSnap.exists()) {
             docRef = doc(db, "users", user.uid);
             docSnap = await getDoc(docRef);
@@ -85,11 +85,10 @@ export default function OrgProfile() {
     };
   }, []);
 
-  // --- IMAGE UPLOAD LOGIC ---
   const handleUpdateProfilePicture = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('Permission Denied', 'We need access to your gallery to change your photo.');
+      Alert.alert('Permission Denied', 'Gallery access is required to change photos.');
       return;
     }
 
@@ -101,8 +100,7 @@ export default function OrgProfile() {
     });
 
     if (!result.canceled) {
-      const localUri = result.assets[0].uri;
-      uploadAndSaveImage(localUri);
+      uploadAndSaveImage(result.assets[0].uri);
     }
   };
 
@@ -112,25 +110,31 @@ export default function OrgProfile() {
     
     setUploadingImage(true);
     try {
-      // 1. Upload to Cloudinary
       const cloudinaryUrl = await uploadToCloudinary(uri);
-      
-      // 2. Update Firestore (using the collection we found earlier)
       const orgRef = doc(db, collectionName, user.uid);
-      await updateDoc(orgRef, {
-        photoURL: cloudinaryUrl
-      });
-
-      // 3. Update Local State immediately
+      await updateDoc(orgRef, { photoURL: cloudinaryUrl });
       setOrgData((prev: any) => ({ ...prev, photoURL: cloudinaryUrl }));
-      
       Alert.alert("Success", "Profile picture updated!");
     } catch (error) {
       console.error(error);
-      Alert.alert("Error", "Failed to upload image. Please check your connection.");
+      Alert.alert("Error", "Failed to upload image.");
     } finally {
       setUploadingImage(false);
     }
+  };
+
+  const handleLogout = async () => {
+    Alert.alert("Logout", "Are you sure you want to sign out?", [
+      { text: "Cancel", style: "cancel" },
+      { 
+        text: "Logout", 
+        style: "destructive", 
+        onPress: async () => {
+          await authService.logout();
+          router.replace('/login');
+        } 
+      }
+    ]);
   };
 
   if (loading) {
@@ -143,20 +147,21 @@ export default function OrgProfile() {
 
   // --- SAFE DATA MAPPING ---
   const displayName = orgData?.organizationName || orgData?.name || 'Organization Name';
-  const displayAddress = typeof orgData?.address === 'string' 
+  const displayAddress = (typeof orgData?.address === 'string' && orgData.address) 
     ? orgData.address 
-    : 'Kathmandu Valley, Nepal'; 
+    : 'Location not provided'; 
   
   const totalRescues = orgData?.totalRescues ?? 0;
   const monthlyRescues = orgData?.monthlyRescues ?? 0;
   const volunteerCount = orgData?.numberOfVolunteers ?? 0;
-  
-  // Logic: Show Spinner OR User Photo OR Default Photo
+  const pendingReports = orgData?.pendingReports ?? 0;
+  const activeOps = orgData?.activeOperations ?? 0;
+
   const renderAvatar = () => {
     if (uploadingImage) {
       return (
         <View style={[styles.avatar, styles.loadingAvatar]}>
-          <ActivityIndicator color={COLORS.primary} size="large" />
+          <ActivityIndicator color={COLORS.primary} size="small" />
         </View>
       );
     }
@@ -184,36 +189,22 @@ export default function OrgProfile() {
           <Pressable style={styles.iconButtonSmall} onPress={() => router.push('/edit-profile')}>
             <MaterialIcons name="edit" size={20} color={COLORS.textMain} />
           </Pressable>
-          <Pressable style={styles.iconButtonSmall}>
-            <MaterialIcons name="share" size={20} color={COLORS.textMain} />
-          </Pressable>
         </View>
       </View>
 
-      <ScrollView 
-        showsVerticalScrollIndicator={false} 
-        contentContainerStyle={styles.scrollContent}
-      >
-        {/* Profile Info */}
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+        
+        {/* Profile Hero */}
         <View style={styles.profileHero}>
           <View style={styles.avatarContainer}>
             {renderAvatar()}
-            
-            {/* Verified Badge (Top Right) */}
             <View style={styles.verifiedBadge}>
               <MaterialIcons name="verified" size={14} color={COLORS.white} />
             </View>
-
-            {/* Camera Button (Bottom Right) */}
-            <Pressable 
-              style={styles.cameraBtn} 
-              onPress={handleUpdateProfilePicture}
-              disabled={uploadingImage}
-            >
-              <MaterialIcons name="photo-camera" size={16} color={COLORS.textMain} />
+            <Pressable style={styles.cameraBtn} onPress={handleUpdateProfilePicture} disabled={uploadingImage}>
+              <MaterialIcons name="photo-camera" size={16} color={COLORS.white} />
             </Pressable>
           </View>
-
           <Text style={styles.orgName}>{displayName}</Text>
           <View style={styles.locationRow}>
             <MaterialIcons name="location-on" size={14} color={COLORS.textSub} />
@@ -224,7 +215,7 @@ export default function OrgProfile() {
           </View>
         </View>
 
-        {/* Lifetime Impact Card */}
+        {/* Impact Section */}
         <View style={styles.impactSection}>
           <View style={styles.impactCard}>
             <View style={styles.impactIconBg}>
@@ -233,77 +224,38 @@ export default function OrgProfile() {
             <Text style={styles.impactLabel}>LIFETIME IMPACT</Text>
             <Text style={styles.impactNumber}>{totalRescues.toLocaleString()}</Text>
             <Text style={styles.impactSubtext}>Total Rescues (All-Time)</Text>
-            
             <View style={styles.divider} />
-            
             <View style={styles.impactFooter}>
               <MaterialIcons name="trending-up" size={16} color={COLORS.primary} />
-              <Text style={styles.impactFooterText}>Consistent growth since 2024</Text>
+              <Text style={styles.impactFooterText}>Consistent growth in 2025</Text>
             </View>
           </View>
         </View>
 
         {/* Stats Grid */}
         <View style={styles.statsGrid}>
-          {/* Rescues Card (Monthly) */}
-          <View style={styles.statCard}>
-            <View style={styles.statHeader}>
-              <View style={[styles.statIconBox, { backgroundColor: '#eff6ff' }]}>
-                <MaterialIcons name="calendar-today" size={20} color={COLORS.blue} />
+          {[
+            { label: 'Monthly Rescues', val: monthlyRescues, icon: 'calendar-today', col: COLORS.blue, bg: '#eff6ff' },
+            { label: 'Pending Reports', val: pendingReports, icon: 'assignment-late', col: COLORS.orange, bg: '#fff7ed' },
+            { label: 'Active Ops', val: activeOps, icon: 'ambulance', col: COLORS.purple, bg: '#f5f3ff', isMCI: true },
+            { label: 'Team Members', val: volunteerCount, icon: 'group', col: COLORS.teal, bg: '#f0fdfa' }
+          ].map((item, idx) => (
+            <View key={idx} style={styles.statCard}>
+              <View style={[styles.statIconBox, { backgroundColor: item.bg }]}>
+                {item.isMCI ? 
+                  <MaterialCommunityIcons name={item.icon as any} size={20} color={item.col} /> :
+                  <MaterialIcons name={item.icon as any} size={20} color={item.col} />
+                }
               </View>
-              <Text style={styles.percentageBadge}>+12%</Text>
-            </View>
-            <View>
-              <Text style={styles.statBigNumber}>{monthlyRescues}</Text>
-              <Text style={styles.statLabel}>Rescues This Month</Text>
-            </View>
-          </View>
-
-          {/* Pending Card */}
-          <View style={styles.statCard}>
-            <View style={styles.statHeader}>
-              <View style={[styles.statIconBox, { backgroundColor: '#fff7ed' }]}>
-                <MaterialIcons name="assignment-late" size={20} color={COLORS.orange} />
-              </View>
-              <View style={styles.pulseContainer}>
-                <View style={styles.pulseDot} />
+              <View>
+                <Text style={styles.statBigNumber}>{item.val}</Text>
+                <Text style={styles.statLabel}>{item.label}</Text>
               </View>
             </View>
-            <View>
-              <Text style={styles.statBigNumber}>5</Text> 
-              <Text style={styles.statLabel}>Pending Reports</Text>
-            </View>
-          </View>
-
-          {/* Active Ops Card */}
-          <View style={styles.statCard}>
-            <View style={styles.statHeader}>
-              <View style={[styles.statIconBox, { backgroundColor: '#f5f3ff' }]}>
-                <MaterialCommunityIcons name="ambulance" size={20} color={COLORS.purple} />
-              </View>
-              <Text style={[styles.percentageBadge, { color: COLORS.purple, backgroundColor: '#f5f3ff' }]}>Live</Text>
-            </View>
-            <View>
-              <Text style={styles.statBigNumber}>2</Text>
-              <Text style={styles.statLabel}>Active Operations</Text>
-            </View>
-          </View>
-
-          {/* Volunteers Card */}
-          <View style={styles.statCard}>
-            <View style={styles.statHeader}>
-              <View style={[styles.statIconBox, { backgroundColor: '#f0fdfa' }]}>
-                <MaterialIcons name="group" size={20} color={COLORS.teal} />
-              </View>
-            </View>
-            <View>
-              <Text style={styles.statBigNumber}>{volunteerCount}</Text>
-              <Text style={styles.statLabel}>Volunteers Online</Text>
-            </View>
-          </View>
+          ))}
         </View>
 
-        {/* Recent Rescues Section */}
+        {/* Recent Rescues Section - RESTORED */}
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Recent Rescues</Text>
           <Pressable style={styles.viewAllBtn} onPress={() => router.push('/myReport')}>
@@ -312,42 +264,33 @@ export default function OrgProfile() {
           </Pressable>
         </View>
 
-        <ScrollView 
-          horizontal 
-          showsHorizontalScrollIndicator={false} 
-          contentContainerStyle={{ paddingLeft: 16, paddingRight: 8 }}
-        >
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalScroll}>
           <View style={styles.rescueCard}>
-            <ImageBackground 
-              source={{ uri: 'https://picsum.photos/seed/rescue1/400/250' }} 
-              style={styles.rescueImg}
-            >
+            <ImageBackground source={{ uri: 'https://picsum.photos/seed/rescue1/400/250' }} style={styles.rescueImg}>
               <View style={styles.rescueOverlay}>
-                <View style={[styles.statusBadge, { backgroundColor: '#10b981' }]}>
-                  <Text style={styles.statusText}>Adopted</Text>
-                </View>
+                <View style={[styles.statusBadge, { backgroundColor: '#10b981' }]}><Text style={styles.statusText}>Adopted</Text></View>
                 <Text style={styles.rescueTitle}>Litter of 3 found a home in Pokhara</Text>
               </View>
             </ImageBackground>
           </View>
-
           <View style={styles.rescueCard}>
-            <ImageBackground 
-              source={{ uri: 'https://picsum.photos/seed/rescue2/400/250' }} 
-              style={styles.rescueImg}
-            >
+            <ImageBackground source={{ uri: 'https://picsum.photos/seed/rescue2/400/250' }} style={styles.rescueImg}>
               <View style={styles.rescueOverlay}>
-                <View style={[styles.statusBadge, { backgroundColor: COLORS.blue }]}>
-                  <Text style={styles.statusText}>Recovered</Text>
-                </View>
-                <Text style={styles.rescueTitle}>Kalu fully recovered from leg surgery</Text>
+                <View style={[styles.statusBadge, { backgroundColor: COLORS.blue }]}><Text style={styles.statusText}>Recovered</Text></View>
+                <Text style={styles.rescueTitle}>Kalu fully recovered from surgery</Text>
               </View>
             </ImageBackground>
           </View>
         </ScrollView>
+
+        {/* Logout Button */}
+        <Pressable style={styles.logoutBtn} onPress={handleLogout}>
+          <MaterialIcons name="logout" size={20} color={COLORS.red} />
+          <Text style={styles.logoutText}>Log Out</Text>
+        </Pressable>
+
       </ScrollView>
 
-      {/* UPDATED: Using Organization Bottom Nav */}
       <OrgBottomNav activePage="profile" />
     </SafeAreaView>
   );
@@ -357,99 +300,48 @@ const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: COLORS.backgroundLight },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   scrollContent: { paddingBottom: 120 },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: COLORS.white,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
-  },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, backgroundColor: COLORS.white },
   headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   headerTitle: { fontSize: 18, fontWeight: '800', color: COLORS.textMain },
   headerRight: { flexDirection: 'row', gap: 8 },
-  iconButton: { width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center' },
+  iconButton: { width: 40, height: 40, justifyContent: 'center' },
   iconButtonSmall: { width: 40, height: 40, borderRadius: 20, backgroundColor: COLORS.backgroundLight, justifyContent: 'center', alignItems: 'center' },
-  
   profileHero: { alignItems: 'center', paddingVertical: 24 },
   avatarContainer: { position: 'relative', marginBottom: 12 },
-  avatar: { width: 96, height: 96, borderRadius: 48, borderWidth: 4, borderColor: COLORS.white },
+  avatar: { width: 100, height: 100, borderRadius: 50, borderWidth: 3, borderColor: COLORS.white },
   loadingAvatar: { justifyContent: 'center', alignItems: 'center', backgroundColor: '#e5e7eb' },
-  
-  // Badge Styles
-  verifiedBadge: { 
-    position: 'absolute', 
-    top: 0, 
-    right: 0, 
-    backgroundColor: '#3b82f6', 
-    borderRadius: 12, 
-    padding: 4, 
-    borderWidth: 2, 
-    borderColor: COLORS.white 
-  },
-  cameraBtn: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    backgroundColor: COLORS.primary,
-    padding: 8,
-    borderRadius: 20,
-    borderWidth: 2,
-    borderColor: COLORS.white,
-    elevation: 3,
-  },
-
-  orgName: { fontSize: 24, fontWeight: '900', color: COLORS.textMain, marginBottom: 4 },
+  verifiedBadge: { position: 'absolute', top: 0, right: 0, backgroundColor: '#3b82f6', borderRadius: 12, padding: 4, borderWidth: 2, borderColor: COLORS.white },
+  cameraBtn: { position: 'absolute', bottom: 0, right: 0, backgroundColor: COLORS.primary, padding: 8, borderRadius: 20, borderWidth: 2, borderColor: COLORS.white },
+  orgName: { fontSize: 22, fontWeight: '900', color: COLORS.textMain, marginBottom: 4 },
   locationRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 12 },
-  locationText: { fontSize: 14, color: COLORS.textSub, fontWeight: '600' },
+  locationText: { fontSize: 14, color: COLORS.textSub },
   ngoTag: { backgroundColor: '#dbeafe', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 20 },
   ngoTagText: { fontSize: 10, fontWeight: '800', color: '#1d4ed8' },
-
   impactSection: { paddingHorizontal: 16, marginBottom: 16 },
-  impactCard: { 
-    backgroundColor: COLORS.surfaceDark, 
-    borderRadius: 24, padding: 24, 
-    alignItems: 'center',
-    overflow: 'hidden',
-  },
+  impactCard: { backgroundColor: COLORS.surfaceDark, borderRadius: 24, padding: 24, alignItems: 'center' },
   impactIconBg: { backgroundColor: 'rgba(255,255,255,0.1)', padding: 12, borderRadius: 24, marginBottom: 12 },
-  impactLabel: { color: COLORS.primary, fontSize: 10, fontWeight: '800', letterSpacing: 1.5, marginBottom: 4 },
-  impactNumber: { color: COLORS.white, fontSize: 48, fontWeight: '900', marginBottom: 4 },
-  impactSubtext: { color: '#cbd5e1', fontSize: 14, fontWeight: '500' },
+  impactLabel: { color: COLORS.primary, fontSize: 10, fontWeight: '800', letterSpacing: 1 },
+  impactNumber: { color: COLORS.white, fontSize: 42, fontWeight: '900' },
+  impactSubtext: { color: '#cbd5e1', fontSize: 14 },
   divider: { width: '100%', height: 1, backgroundColor: 'rgba(255,255,255,0.1)', marginVertical: 16 },
   impactFooter: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  impactFooterText: { color: '#94a3b8', fontSize: 12, fontWeight: '600' },
-
-  statsGrid: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 10, marginBottom: 16 },
-  statCard: { 
-    backgroundColor: COLORS.white, 
-    width: (width - 44) / 2, 
-    height: 140, 
-    margin: 6, 
-    borderRadius: 20, 
-    padding: 16, 
-    justifyContent: 'space-between',
-    borderWidth: 1, borderColor: '#F3F4F6'
-  },
-  statHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
-  statIconBox: { padding: 8, borderRadius: 12 },
-  percentageBadge: { fontSize: 10, fontWeight: '800', color: '#16a34a', backgroundColor: '#f0fdf4', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 },
-  pulseContainer: { width: 12, height: 12, justifyContent: 'center', alignItems: 'center' },
-  pulseDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: COLORS.orange },
-  statBigNumber: { fontSize: 28, fontWeight: '900', color: COLORS.textMain },
-  statLabel: { fontSize: 12, color: COLORS.textSub, fontWeight: '600', marginTop: 4 },
-
-  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, marginBottom: 12 },
+  impactFooterText: { color: '#94a3b8', fontSize: 12 },
+  statsGrid: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 10, marginBottom: 10 },
+  statCard: { backgroundColor: COLORS.white, width: (width - 44) / 2, margin: 6, borderRadius: 20, padding: 16, borderWidth: 1, borderColor: '#F3F4F6' },
+  statIconBox: { padding: 8, borderRadius: 12, alignSelf: 'flex-start', marginBottom: 10 },
+  statBigNumber: { fontSize: 24, fontWeight: '900', color: COLORS.textMain },
+  statLabel: { fontSize: 12, color: COLORS.textSub, fontWeight: '600' },
+  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, marginVertical: 15 },
   sectionTitle: { fontSize: 18, fontWeight: '800', color: COLORS.textMain },
   viewAllBtn: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   viewAllText: { fontSize: 12, fontWeight: '800', color: COLORS.primary },
-  
+  horizontalScroll: { paddingLeft: 16, paddingRight: 8, marginBottom: 20 },
   rescueCard: { width: 280, height: 160, borderRadius: 20, marginRight: 16, overflow: 'hidden' },
   rescueImg: { flex: 1, justifyContent: 'flex-end' },
   rescueOverlay: { padding: 12, backgroundColor: 'rgba(0,0,0,0.4)' },
   statusBadge: { alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 12, marginBottom: 4 },
   statusText: { color: COLORS.white, fontSize: 10, fontWeight: '800' },
   rescueTitle: { color: COLORS.white, fontSize: 14, fontWeight: '700', lineHeight: 18 },
+  logoutBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff', margin: 16, padding: 16, borderRadius: 15, borderWidth: 1, borderColor: '#fee2e2' },
+  logoutText: { color: COLORS.red, fontWeight: '800', marginLeft: 8 }
 });

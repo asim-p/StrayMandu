@@ -58,18 +58,19 @@ export default function Home() {
 
   // Helper to get badge color based on condition
   const getConditionColor = (condition: string) => {
-    switch (condition) {
-      case 'Injured':
-      case 'Aggressive':
-        return COLORS.danger;
-      case 'Healthy':
-        return COLORS.success;
-      case 'Neutral':
-      case 'Unknown':
-      default:
-        return COLORS.warning;
-    }
-  };
+  switch (condition) {
+    case 'Cruelty':   // Added case
+    case 'Injured':
+    case 'Aggressive':
+      return COLORS.danger;
+    case 'Healthy':
+      return COLORS.success;
+    case 'Neutral':
+    case 'Unknown':
+    default:
+      return COLORS.warning;
+  }
+};
 
   useEffect(() => {
     let mounted = true;

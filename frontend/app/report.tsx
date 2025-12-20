@@ -56,7 +56,7 @@ export default function ReportScreen() {
   const [breed, setBreed] = useState('');
   const [gender, setGender] = useState<'Male' | 'Female' | 'Unknown'>('Unknown');
   const [color, setColor] = useState('');
-  const [condition, setCondition] = useState<'Neutral' | 'Healthy' | 'Injured' | 'Aggressive' | 'Unknown'>('Unknown');
+  const [condition, setCondition] = useState<'Neutral' | 'Healthy' | 'Cruelty' |'Injured' | 'Aggressive' | 'Unknown'>('Unknown');
   const [characteristics, setCharacteristics] = useState('');
   const [description, setDescription] = useState('');
   const [location, setLocation] = useState<LocationData | null>(null);
@@ -336,7 +336,7 @@ export default function ReportScreen() {
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Condition</Text>
               <View style={styles.chipContainer}>
-                {['Neutral', 'Healthy', 'Injured', 'Aggressive', 'Unknown'].map((c) => (
+                {['Neutral', 'Healthy', 'Injured', 'Cruelty', 'Aggressive', 'Unknown'].map((c) => (
                   <Pressable
                     key={c}
                     onPress={() => setCondition(c as any)}
