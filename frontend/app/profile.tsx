@@ -21,6 +21,7 @@ import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { authService } from '../src/services/authService';
 import * as ImagePicker from 'expo-image-picker'; 
 import { uploadToCloudinary } from '../src/services/cloudinaryService'; 
+import { collection, query, where, getCountFromServer } from 'firebase/firestore';
 
 const DEFAULT_IMAGE = require('../img/default.png'); 
 
@@ -40,7 +41,8 @@ export default function Profile() {
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [loading, setLoading] = useState(true);
   const [uploadingImage, setUploadingImage] = useState(false); 
-  
+  const [reportCount, setReportCount] = useState(0);
+
   const [userData, setUserData] = useState({
     uid: '',
     name: 'User',
@@ -49,9 +51,27 @@ export default function Profile() {
     location: 'Nepal',
     reportsCount: 0,
   });
+  const fetchReportCount = async () => {
+    const user = auth.currentUser;
+    if (!user) return;
 
+    try {
+      const coll = collection(db, "reports");
+      // Query: "Select all reports where reporterId equals my ID"
+      const q = query(coll, where("reporterId", "==", user.uid));
+      
+      // Efficiently count them on the server (doesn't download all data)
+      const snapshot = await getCountFromServer(q);
+      
+      console.log('Count found:', snapshot.data().count);
+      setReportCount(snapshot.data().count);
+    } catch (error) {
+      console.error("Error counting reports:", error);
+    }
+  };
   // 1. Fetch User Data
   useEffect(() => {
+    fetchReportCount();
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
         const basicInfo = {
@@ -216,22 +236,29 @@ export default function Profile() {
             <Text style={styles.locationText}>{userData.location}</Text>
           </View>
 
-          <Pressable style={styles.editBtn} onPress={() => router.push('/edit-profile')}>
-            <MaterialIcons name="edit" size={18} color={COLORS.textMain} />
-            <Text style={styles.editBtnText}>Edit Profile</Text>
-          </Pressable>
+          <Pressable 
+              disabled={true} 
+              style={styles.editBtn} 
+              // onPress is effectively removed
+            >
+              <MaterialIcons name="edit" size={18} color={COLORS.textMain} />
+              <Text style={styles.editBtnText}>Edit Profile</Text>
+            </Pressable>
         </View>
 
         {/* Stats Row */}
-        <View style={styles.statsContainer}>
-          <View style={styles.statCard}>
-            <View style={[styles.statIconCircle, { backgroundColor: '#eff6ff' }]}>
-              <MaterialIcons name="assignment" size={20} color="#2563eb" />
-            </View>
-            <Text style={styles.statNumber}>{userData.reportsCount}</Text>
-            <Text style={styles.statLabel}>MY REPORTS</Text>
-          </View>
-        </View>
+<View style={styles.statsContainer}>
+  <View style={styles.statCard}>
+    <View style={[styles.statIconCircle, { backgroundColor: '#eff6ff' }]}>
+      <MaterialIcons name="assignment" size={20} color="#2563eb" />
+    </View>
+    
+    {/* REPLACE THIS LINE */}
+    <Text style={styles.statNumber}>{reportCount}</Text>
+    
+    <Text style={styles.statLabel}>MY REPORTS</Text>
+  </View>
+</View>
 
         {/* Activity Section */}
         <Text style={styles.sectionTitle}>My Activity</Text>

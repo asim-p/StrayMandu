@@ -30,10 +30,10 @@ const COLORS = {
 
 // Ensure these paths are correct relative to this file
 const TEAM_MEMBERS = [
-  { id: 1, name: 'Asim', role: 'Founder', img: require('../img/Asim.png') },
-  { id: 2, name: 'Ashal', role: 'Tech Lead', img: require('../img/Ashal.png') },
-  { id: 3, name: 'Prashan', role: 'Community', img: require('../img/Prashan.png') },
-  { id: 4, name: 'Sumarga', role: 'Ops', img: require('../img/Sumarga.png') },
+  { id: 1, name: 'Asim', role: 'Leader', img: require('../img/Asim.png') },
+  { id: 2, name: 'Ashal', role: 'Tech Researcher', img: require('../img/Ashal.png') },
+  { id: 3, name: 'Prashan', role: 'Developer', img: require('../img/Prashan.png') },
+  { id: 4, name: 'Sumarga', role: 'UI designer', img: require('../img/Sumarga.png') },
 ];
 
 export default function About() {

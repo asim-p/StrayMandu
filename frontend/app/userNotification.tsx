@@ -66,6 +66,11 @@ export default function UserNotification() {
 
   const handleMarkAllAsRead = async () => {
     try {
+      if (notifications.filter(n => !n.isRead).length === 0) {
+        showAlert("All Caught Up!", "You have no unread notifications.", "info");
+        return;
+      }
+      
       await notificationService.markAllAsRead(notifications);
       Alert.alert('Success', 'All notifications marked as read');
     } catch (error) {

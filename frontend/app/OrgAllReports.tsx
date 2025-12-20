@@ -152,7 +152,7 @@ export default function OrgHome() {
           </View>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingLeft: 16 }}>
             {nearby.map(item => (
-               <Pressable key={item.id} style={styles.nearCard} onPress={() => router.push({ pathname: '/detailReports', params: { id: item.id } })}>
+               <Pressable key={item.id} style={styles.nearCard} onPress={() => router.push({ pathname: '/OrgDetailViews', params: { id: item.id } })}>
                  <ImageBackground source={{ uri: item.imageUrls?.[0] }} style={styles.nearImg} imageStyle={{ borderRadius: 16 }}>
                    <View style={styles.nearOverlay}>
                      <Text style={styles.nearDistText}>{item.dist.toFixed(1)} km</Text>
@@ -177,7 +177,7 @@ export default function OrgHome() {
 
           <View style={styles.listContainer}>
             {recent.map(item => (
-              <Pressable key={item.id} style={styles.recentRow} onPress={() => router.push({ pathname: '/detailReports', params: { id: item.id } })}>
+              <Pressable key={item.id} style={styles.recentRow} onPress={() => router.push({ pathname: '/OrgDetailViews', params: { id: item.id } })}>
                 <Image source={{ uri: item.imageUrls?.[0] }} style={styles.rowImg} />
                 <View style={styles.rowContent}>
                   <View style={styles.rowHeader}>
