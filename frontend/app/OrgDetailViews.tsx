@@ -244,13 +244,18 @@ export default function OrgDetailViews() {
 
         // Create a notification for the user who reported the dog
         if (report && report.reporterId) {
-          await notificationService.createStatusChangeNotification(
+          await notificationService.sendNotification(
             report.reporterId,
-            id as string,
-            report.name || 'Unknown Dog',
-            report.breed || 'Unknown Breed',
-            newStatus,
-            claimingOrgName || 'Your Organization'
+            `${report.name || 'Stray Dog'} Status Update`,
+            `${claimingOrgName || 'An organization'} updated the status to: ${newStatus}`,
+            'assignment_turned_in',
+            {
+              reportId: id as string,
+              dogName: report.name || 'Unknown Dog',
+              breed: report.breed || 'Unknown Breed',
+              newStatus: newStatus,
+              orgName: claimingOrgName || 'Organization'
+            }
           );
         }
 
