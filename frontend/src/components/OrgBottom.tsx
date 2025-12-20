@@ -67,7 +67,7 @@ export default function OrgBottomNav({ activePage }: OrgBottomNavProps) {
       {/* Floating "All Reports" Button */}
       <View style={styles.floatingButtonContainer}>
         <Pressable 
-          onPress={() => router.push('/myReport')}
+          onPress={() => router.push('/OrgAllReports')}
           style={({pressed}) => [
             styles.floatingButton, 
             pressed && { transform: [{scale: 0.95}] }
