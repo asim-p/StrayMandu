@@ -278,7 +278,7 @@ export default function OrgHome() {
                   <View style={styles.locationIconBg}><MaterialIcons name="my-location" size={18} color={COLORS.primary} /></View>
                   <View>
                     <Text style={styles.mapInfoTitle}>Operational HQ</Text>
-                    <Text style={styles.mapInfoSub}>{currentAddress}</Text>
+                    <Text style={styles.mapInfoSub}>{ 'New Baneshwor, Kathmandu'}</Text>
                   </View>
                 </View>
                 <View style={styles.activeBadge}><Text style={styles.activeBadgeText}>Live Coverage</Text></View>

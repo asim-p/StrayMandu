@@ -274,7 +274,7 @@ export default function Home() {
                   </View>
                   <View>
                     <Text style={styles.mapInfoTitle}>Current Location</Text>
-                    <Text style={styles.mapInfoSub}>{currentAddress}</Text>
+                    <Text style={styles.mapInfoSub}>{ 'New Baneshwor, Kathmandu'}</Text>
                   </View>
                 </View>
                 <View style={styles.activeBadge}>
