@@ -1,4 +1,4 @@
-    import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   SafeAreaView,
   View,
@@ -12,8 +12,7 @@ import {
 } from 'react-native';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useAuth } from '../src/context/AuthContext';
-import { notificationService, Notification } from '../src/services/notificationService';
+// Removed: useAuth and notificationService imports
 import OrgBottomNav from '../src/components/OrgBottom';
 
 const { width } = Dimensions.get('window');
@@ -34,34 +33,81 @@ const COLORS = {
 
 const CATEGORIES = ['All', 'Reports', 'Urgent', 'System'];
 
+// --- MOCK DATA GENERATOR ---
+// We create a helper to mimic Firestore Timestamp: { toDate: () => Date }
+const createTimestamp = (daysAgo = 0, hoursAgo = 0) => {
+  const date = new Date();
+  date.setDate(date.getDate() - daysAgo);
+  date.setHours(date.getHours() - hoursAgo);
+  return { toDate: () => date };
+};
+
+const MOCK_NOTIFICATIONS = [
+  {
+    id: '1',
+    title: 'Urgent: Bin Overflow',
+    desc: 'Bin #403 at Central Park is at 98% capacity. Immediate pickup required.',
+    type: 'alert-decagram',
+    category: 'Urgent',
+    isRead: false,
+    createdAt: createTimestamp(0, 1), // Today, 1 hour ago
+  },
+  {
+    id: '2',
+    title: 'New Report Submitted',
+    desc: 'A user reported a missed pickup in Sector 4 via the mobile app.',
+    type: 'bell-ring',
+    category: 'Reports',
+    isRead: false,
+    createdAt: createTimestamp(0, 5), // Today, 5 hours ago
+  },
+  {
+    id: '3',
+    title: 'System Maintenance',
+    desc: 'Scheduled server maintenance was completed successfully at 3:00 AM.',
+    type: 'check_circle',
+    category: 'System',
+    isRead: true,
+    createdAt: createTimestamp(1, 0), // Yesterday
+  },
+  {
+    id: '4',
+    title: 'Weekly Summary Available',
+    desc: 'Your organization collected 450kg of waste last week. Click to view report.',
+    type: 'bell-ring',
+    category: 'System',
+    isRead: true,
+    createdAt: createTimestamp(5, 0), // 5 Days ago (Earlier)
+  },
+];
+
 export default function OrgNotification() {
   const router = useRouter();
-  const { user } = useAuth();
-
-  const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [loading, setLoading] = useState(true);
+  
+  // Set initial state to MOCK_NOTIFICATIONS
+  const [notifications, setNotifications] = useState(MOCK_NOTIFICATIONS);
+  const [loading, setLoading] = useState(false); // No loading needed for hardcoded
   const [activeTab, setActiveTab] = useState('All');
 
-  // --- REAL-TIME DATA FETCH ---
-  useEffect(() => {
-    if (!user?.uid) return;
+  // --- LOCAL HANDLERS (Replacing Service Calls) ---
+  const handleMarkAsRead = (id) => {
+    setNotifications(prev => 
+      prev.map(n => n.id === id ? { ...n, isRead: true } : n)
+    );
+  };
 
-    const unsubscribe = notificationService.subscribe(user.uid, (data) => {
-      setNotifications(data);
-      setLoading(false);
-    });
-
-    return () => unsubscribe();
-  }, [user]);
+  const handleMarkAllRead = () => {
+    setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
+  };
 
   // --- GROUPING LOGIC ---
-  const groupNotifications = (notis: Notification[]) => {
+  const groupNotifications = (notis) => {
     const today = new Date().setHours(0, 0, 0, 0);
     const yesterday = new Date(today - 86400000).setHours(0, 0, 0, 0);
 
     const filtered = notis.filter((n) => {
       if (activeTab === 'All') return true;
-      if (activeTab === 'Urgent') return n.type === 'check_circle' || n.title.toLowerCase().includes('urgent');
+      if (activeTab === 'Urgent') return n.category === 'Urgent' || n.title.toLowerCase().includes('urgent');
       return n.category === activeTab;
     });
 
@@ -78,13 +124,13 @@ export default function OrgNotification() {
   const groups = groupNotifications(notifications);
 
   // --- RENDER NOTIFICATION ITEM ---
-  const renderItem = (item: Notification) => {
-    const isUrgent = item.title.toLowerCase().includes('urgent') || item.type === 'check_circle';
+  const renderItem = (item) => {
+    const isUrgent = item.title.toLowerCase().includes('urgent') || item.category === 'Urgent';
     
     return (
       <Pressable 
         key={item.id}
-        onPress={() => notificationService.markAsRead(item.id)}
+        onPress={() => handleMarkAsRead(item.id)}
         style={[styles.notiCard, !item.isRead && styles.unreadCard]}
       >
         <View style={[
@@ -123,7 +169,7 @@ export default function OrgNotification() {
           <Pressable onPress={() => router.back()} style={styles.backBtn}>
             <MaterialIcons name="arrow-back" size={24} color={COLORS.textMain} />
           </Pressable>
-          <Pressable onPress={() => notificationService.markAllAsRead(notifications)}>
+          <Pressable onPress={handleMarkAllRead}>
             <Text style={styles.markAll}>Mark all read</Text>
           </Pressable>
         </View>
@@ -173,16 +219,17 @@ export default function OrgNotification() {
 }
 
 // --- SUB-COMPONENTS ---
-const Section = ({ title, items, render }: any) => (
+const Section = ({ title, items, render }) => (
   <View style={styles.section}>
     <Text style={styles.sectionTitle}>{title.toUpperCase()}</Text>
-    {items.map((item: any) => render(item))}
+    {items.map((item) => render(item))}
   </View>
 );
 
 // --- HELPER ---
-const formatTime = (date: Date) => {
+const formatTime = (date) => {
   const diff = (new Date().getTime() - date.getTime()) / 1000;
+  if (diff < 60) return 'Just now';
   if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
   if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
   return `${Math.floor(diff / 86400)}d ago`;
@@ -206,7 +253,7 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 12, fontWeight: '800', color: '#94a3b8', marginBottom: 12, letterSpacing: 1 },
   
   notiCard: { flexDirection: 'row', backgroundColor: COLORS.white, padding: 15, borderRadius: 16, marginBottom: 10, alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.03, shadowRadius: 10, elevation: 2 },
-  unreadCard: { borderWidth: 1, borderColor: COLORS.primary + '30' },
+  unreadCard: { borderWidth: 1, borderColor: COLORS.primary + '80', backgroundColor: '#f0fdf4' },
   iconCircle: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
   content: { flex: 1, marginLeft: 15 },
   notiHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
