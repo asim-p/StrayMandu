@@ -1,51 +1,93 @@
-# Welcome to your Expo app 👋
+# StrayMandu 🐕🇳🇵
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+> **Report, Rescue, React.** A community-driven platform to help stray dogs in Kathmandu.
 
-## Get started
+StrayMandu connects compassionate citizens with animal rescue organizations. Users can easily report stray dogs in need of help, while registered organizations can view these reports, coordinate rescues, and update the community on their efforts.
 
+## 🌟 Features
 
-1. Install dependencies
+### For Users (Reporters)
+-   **Report Stray Dogs**: Capture photos and details (breed, condition, location) of stray dogs.
+-   **Interactive Map**: View reported dogs in your area.
+-   **Track Reports**: See the status of your reports (Pending, Rescued, etc.).
+-   **Community**: Access leaderboards and donation options to support the cause.
 
-   ```bash
-   npm install
-   ```
+### For Organizations (Rescuers)
+-   **Dashboard**: Overview of pending cases and rescue statistics.
+-   **Real-time Alerts**: Receive notifications for urgent reports nearby.
+-   **Rescue Management**: Update the status of reports and manage rescue teams.
+-   **Profile**: Showcase your organization's impact and details.
 
-2. Start the app
+## 🛠️ Tech Stack
 
-   ```bash
-   npx expo start
-   ```
+-   **Framework**: [React Native](https://reactnative.dev/) with [Expo](https://expo.dev/) (SDK 52)
+-   **Language**: [TypeScript](https://www.typescriptlang.org/)
+-   **Routing**: [Expo Router](https://docs.expo.dev/router/introduction/)
+-   **Backend & Auth**: [Firebase](https://firebase.google.com/) (Firestore, Auth)
+-   **Maps**: [react-native-maps](https://github.com/react-native-maps/react-native-maps)
+-   **Media**: Cloudinary / Appwrite
 
-In the output, you'll find options to open the app in a
+## 🚀 Getting Started
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+### Prerequisites
+-   Node.js (LTS recommended)
+-   npm or yarn
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+### Installation
 
-## Get a fresh project
+1.  **Clone the repository**
+    ```bash
+    git clone https://github.com/asim-p/StrayMandu.git
+    cd StrayMandu
+    ```
 
-When you're ready, run:
+2.  **Install dependencies**
+    ```bash
+    npm install
+    ```
 
-```bash
-npm run reset-project
+3.  **Start the application**
+    ```bash
+    npx expo start
+    ```
+
+4.  **Run on Device/Emulator**
+    -   Scan the QR code with the **Expo Go** app (Android/iOS).
+    -   Press `a` to open in Android Emulator.
+    -   Press `i` to open in iOS Simulator.
+
+## 📂 Project Structure
+
+The project has been restructured to a clean root-level layout:
+
+```
+StrayMandu/
+├── app/                 # Expo Router screens (pages)
+│   ├── Org*.tsx        # Organization-specific screens
+│   ├── (tabs)/         # Main navigation tabs (if applicable)
+│   ├── index.tsx       # Entry point
+│   └── ...
+├── src/
+│   ├── components/     # Reusable UI components
+│   ├── config/         # Firebase/Appwrite config
+│   ├── context/        # React Context (Auth, etc.)
+│   ├── hooks/          # Custom Hooks
+│   ├── services/       # API services (Report, Notification)
+│   └── utils/          # Helper functions
+├── assets/             # Images and fonts
+└── package.json        # Dependencies and scripts
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+## 🤝 Contributing
 
-## Learn more
+We welcome contributions! Please fork the repository and submit a pull request.
 
-To learn more about developing your project with Expo, look at the following resources:
+1.  Fork the Project
+2.  Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
+3.  Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
+4.  Push to the Branch (`git push origin feature/AmazingFeature`)
+5.  Open a Pull Request
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+## 📄 License
 
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+This project is licensed under the MIT License.
