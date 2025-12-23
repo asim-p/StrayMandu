@@ -1,7 +1,0 @@
-express
-mongoose
-dotenv
-bcrypt
-jsonwebtoken
-multer
-path

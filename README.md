@@ -1,73 +1,51 @@
+# Welcome to your Expo app 👋
 
-# StrayMandu — Stray Dog Solution for Nepal
+This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
 
-> Hackathon prototype for mapping, reporting, and improving stray dog welfare and public safety in Nepal. Work in progress.
-
-
-## Overview
-StrayMandu is a full-stack system designed to:
-- Map stray dog populations with geolocated reports
-- Enable easy community reporting (sightings, injuries, litters)
-- Coordinate rescue, vaccination, and feeding efforts
-- Provide actionable data for NGOs and municipal authorities
-- Support volunteers with task assignment and status updates
-- Deliver analytics and exportable reports for partners
+## Get started
 
 
-## Problem Addressed
-Stray dogs in Nepal face public-health and safety challenges, with fragmented response and scarce data. StrayMandu bridges this gap by providing a unified platform for reporting, coordination, and data-driven action.
+1. Install dependencies
 
+   ```bash
+   npm install
+   ```
 
-## What StrayMandu Excels At
+2. Start the app
 
-### Frontend
-- Mobile-friendly, responsive UI for reporting and viewing data
-- Real-time notifications and updates
-- Photo upload and GPS location capture
-- User authentication and profile management
-- Volunteer dashboard for task management
-- Organization dashboard for analytics and report exports
+   ```bash
+   npx expo start
+   ```
 
-### Backend
-- Secure user registration and login
-- Dog registration and tracking
-- Real-time data sync with Firebase
-- RESTful API for reports, users, and organizations
-- Batch operations (e.g., mark all notifications read)
-- Modular code structure for easy extension
+In the output, you'll find options to open the app in a
 
+- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
+- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
+- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
+- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
 
-## Goals & Impact
-- Rapid collection of geolocated stray dog reports
-- Central dashboard for NGOs/municipalities to triage and allocate resources
-- Volunteer engagement and task claiming (rescue, vaccination, feeding)
-- Data-driven analytics to identify hotspots and trends
-- Exportable CSV reports for partners and authorities
+You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
 
+## Get a fresh project
 
-## Key Features
-- Mobile-friendly report form (photo upload, GPS coordinates)
-- Real-time notifications and filtering (by category)
-- Admin dashboard with map, filtered lists, and analytics
-- Volunteer task assignment and status updates
-- Organization dashboard for report management
-- Exportable CSV reports for partners
-- Secure authentication and user management
+When you're ready, run:
 
+```bash
+npm run reset-project
+```
 
-## Tech Stack
-- **Frontend:** React Native (Expo), TypeScript
-- **Backend:** Node.js, Express
-- **Database:** Firebase Firestore (prototype), extensible to PostgreSQL/SQLite
-- **Other:** Expo Router, Modular codebase, RESTful APIs
+This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
 
-## Why StrayMandu?
-- Empowers communities to report and help stray dogs
-- Enables NGOs and authorities to act on real data
-- Streamlines volunteer coordination and impact
-- Provides a scalable, extensible foundation for future growth
+## Learn more
 
----
-For questions, feedback, or collaboration, see the code or contact the team!
+To learn more about developing your project with Expo, look at the following resources:
 
+- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
+- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
 
+## Join the community
+
+Join our community of developers creating universal apps.
+
+- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
+- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
