@@ -25,7 +25,7 @@ StrayMandu connects compassionate citizens with animal rescue organizations. Use
 -   **Routing**: [Expo Router](https://docs.expo.dev/router/introduction/)
 -   **Backend & Auth**: [Firebase](https://firebase.google.com/) (Firestore, Auth)
 -   **Maps**: [react-native-maps](https://github.com/react-native-maps/react-native-maps)
--   **Media**: Cloudinary / Appwrite
+-   **Media**: Cloudinary
 
 ## 🚀 Getting Started
 
@@ -69,7 +69,7 @@ StrayMandu/
 │   └── ...
 ├── src/
 │   ├── components/     # Reusable UI components
-│   ├── config/         # Firebase/Appwrite config
+│   ├── config/         # Firebase config
 │   ├── context/        # React Context (Auth, etc.)
 │   ├── hooks/          # Custom Hooks
 │   ├── services/       # API services (Report, Notification)
