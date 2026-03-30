@@ -18,6 +18,31 @@ StrayMandu connects compassionate citizens with animal rescue organizations. Use
 -   **Rescue Management**: Update the status of reports and manage rescue teams.
 -   **Profile**: Showcase your organization's impact and details.
 
+## 📱 App Screenshots
+
+<p align="center">
+  <img src="demo/1.png" width="30%" />
+  <img src="demo/2.png" width="30%" />
+  <img src="demo/3.png" width="30%" />
+</p>
+
+<p align="center">
+  <img src="demo/4.png" width="30%" />
+  <img src="demo/5.png" width="30%" />
+  <img src="demo/6.png" width="30%" />
+</p>
+
+<p align="center">
+  <img src="demo/7.png" width="30%" />
+  <img src="demo/8.png" width="30%" />
+  <img src="demo/9.png" width="30%" />
+</p>
+
+<p align="center">
+  <img src="demo/10.png" width="30%" />
+  <img src="demo/11.png" width="30%" />
+</p>
+
 ## 🛠️ Tech Stack
 
 -   **Framework**: [React Native](https://reactnative.dev/) with [Expo](https://expo.dev/) (SDK 52)
