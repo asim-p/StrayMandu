@@ -23,13 +23,14 @@ StrayMandu connects compassionate citizens with animal rescue organizations. Use
 <p align="center">
   <img src="demo/1.png" width="30%" />
   <img src="demo/2.png" width="30%" />
-  <img src="demo/3.png" width="30%" />
+  <img src="demo/6.png" width="30%" />
+
 </p>
 
 <p align="center">
   <img src="demo/4.png" width="30%" />
   <img src="demo/5.png" width="30%" />
-  <img src="demo/6.png" width="30%" />
+  <img src="demo/3.png" width="30%" />
 </p>
 
 <p align="center">
